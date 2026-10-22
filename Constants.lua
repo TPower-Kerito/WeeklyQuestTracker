@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.0.5"
+WQT.VERSION = "1.0.6"
 WQT.ADDON_TITLE = "|cff00ccffWeekly Quest Tracker|r"
 
 -- Default Tracked Quests
@@ -45,6 +45,11 @@ WQT.DEFAULT_QUESTS = {
         name = "Unity Against the Void",
         -- 93744: Meta quest, 93767: Arcantina, 93890: Abundance, 95843: Ritual Sites, 93909: Delves
         ids = { 93744, 93767, 93890, 95843, 93909 },
+        isWeekly = true,
+    },
+    {
+        name = "Turn Back the Surge",
+        ids = { 96995 },
         isWeekly = true,
     },
 }
