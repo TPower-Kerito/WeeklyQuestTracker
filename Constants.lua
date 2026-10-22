@@ -43,7 +43,7 @@ WQT.DEFAULT_QUESTS = {
     },
     {
         name = "Unity Against the Void",
-        ids = { 93744 },
+        ids = { 93744, 93767 },
         isWeekly = true,
     },
 }
