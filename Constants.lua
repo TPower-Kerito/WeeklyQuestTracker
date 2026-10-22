@@ -41,6 +41,11 @@ WQT.DEFAULT_QUESTS = {
         ids = { 82414, 83240, 84300, 83120, 83121, 83122 },
         isWeekly = true,
     },
+    {
+        name = "Unity Against the Void",
+        ids = { 93744 },
+        isWeekly = true,
+    },
 }
 
 -- Default Addon Configuration

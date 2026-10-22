@@ -91,6 +91,31 @@ function WQT.InitDB()
                 charData.quests["Lost Legends"] = nil
             end
         end
+
+        -- Ensure all default quests (e.g. Unity Against the Void) exist in user DB
+        for _, defQ in ipairs(WQT.DEFAULT_QUESTS) do
+            local found = false
+            for _, q in ipairs(WeeklyQuestTrackerDB.quests) do
+                if q.name == defQ.name then
+                    found = true
+                    local idMap = {}
+                    for _, id in ipairs(q.ids or {}) do idMap[id] = true end
+                    for _, newId in ipairs(defQ.ids or {}) do
+                        if not idMap[newId] then
+                            table.insert(q.ids, newId)
+                        end
+                    end
+                    break
+                end
+            end
+            if not found then
+                table.insert(WeeklyQuestTrackerDB.quests, {
+                    name = defQ.name,
+                    ids = { unpack(defQ.ids or {}) },
+                    isWeekly = defQ.isWeekly,
+                })
+            end
+        end
     end
 
     if not WeeklyQuestTrackerDB.settings then
@@ -338,6 +363,25 @@ function WQT.CheckQuests(searchFilter)
     if foundActive == 0 then
         print("  (No active quests matching filter)")
     end
+
+    -- If a Quest Choice window is open, inspect choice options
+    pcall(function()
+        if C_QuestChoice and C_QuestChoice.GetNumChoices then
+            local num = C_QuestChoice.GetNumChoices()
+            if num and num > 0 then
+                print(string.format("%s: --- Quest Choice Options (%d available) ---", WQT.ADDON_TITLE, num))
+                for idx = 1, num do
+                    local opt = C_QuestChoice.GetQuestChoiceOptionInfo(idx)
+                    if opt then
+                        print(string.format("  Choice %d: |cff00ccff%s|r [OptionID: %s, QuestID: |cff00ff00%s|r]",
+                            idx, tostring(opt.title or opt.header or opt.buttonText or "Choice"),
+                            tostring(opt.choiceID or opt.responseID or "N/A"),
+                            tostring(opt.questID or "N/A")))
+                    end
+                end
+            end
+        end
+    end)
 end
 
 -- Slash Commands Handler
