@@ -1,0 +1,8 @@
+# WoW Addon Git Ignore
+*.zip
+*.bak
+*.tmp
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
