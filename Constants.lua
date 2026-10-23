@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.1.1"
+WQT.VERSION = "1.1.2"
 WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
 
 -- Available Minimap / Header Icons for User Selection
@@ -64,59 +64,14 @@ WQT.DEFAULT_QUESTS = {
     },
 }
 
--- Predefined Quest Waypoints & Navigation Objectives
-WQT.QUEST_WAYPOINTS = {
-    ["Fortify the Runestones"] = {
-        mapID = 2248, -- Isle of Dorn / Hallowfall Defense
-        x = 0.485,
-        y = 0.458,
-        zone = "Isle of Dorn",
-        desc = "Defense Hub",
-    },
-    ["Abundant Offerings"] = {
-        mapID = 2248, -- Isle of Dorn / Loa of Abundance Harvest
-        x = 0.472,
-        y = 0.421,
-        zone = "Isle of Dorn",
-        desc = "Weekly Harvest Hub",
-    },
-    ["The Story of the Root of the World"] = {
-        mapID = 2214, -- The Ringing Deeps / Haranir Roots
-        x = 0.490,
-        y = 0.380,
-        zone = "The Ringing Deeps",
-        desc = "Haranir Roots & Sacred Legends",
-    },
-    ["Trailing Xal'atath"] = {
-        mapID = 2339, -- Dornogal
-        x = 0.482,
-        y = 0.460,
-        zone = "Dornogal",
-        desc = "Storyline Investigation Hub",
-    },
-    ["Unity Against the Void"] = {
-        mapID = 2339, -- Dornogal / Arcantina
-        x = 0.495,
-        y = 0.445,
-        zone = "Dornogal",
-        desc = "Choice Hub (Arcantina / Delves / Rituals)",
-    },
-    ["Turn Back the Surge"] = {
-        mapID = 2369, -- The Siren Isle / Coiled Isle
-        x = 0.520,
-        y = 0.480,
-        zone = "The Coiled Isle",
-        desc = "Cursed Surge Public Event",
-    },
-}
-
 -- Default Addon Configuration
 WQT.DEFAULT_CONFIG = {
     viewMode = "current", -- "current", "grid", "cards", "todo", or "settings"
     theme = "modern",    -- "modern" (Midnight Dark Glow) or "classic" (Slate)
-    iconTexture = "Interface\\Icons\\inv_misc_compass_01", -- New modern Golden Compass
+    iconTexture = "Interface\\Icons\\inv_misc_compass_01", -- Modern Golden Compass
     showMinimapButton = true,
     minimapAngle = 45,
+    showMiniHUD = true, -- Feature 2: Compact On-Screen Floating Tracker Bar
     showClassIcons = true,
     highlightCurrentChar = true,
     autoOpenOnLogin = false,

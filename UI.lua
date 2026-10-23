@@ -109,6 +109,10 @@ function WQT.UpdateAddonIcon(texturePath)
     if mainFrame and mainFrame.titleIcon then
         mainFrame.titleIcon:SetTexture(texturePath)
     end
+    local hud = _G["WQT_MiniHUD"]
+    if hud and hud.iconTex then
+        hud.iconTex:SetTexture(texturePath)
+    end
 end
 
 -- Resolve Full or Compact Status Display String
@@ -855,7 +859,7 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         qTitle:SetText("|cffffd100" .. qName .. "|r")
 
         local statusPill = CreateFrame("Frame", nil, rowCard, "BackdropTemplate")
-        statusPill:SetSize(175, 30)
+        statusPill:SetSize(185, 30)
         statusPill:SetPoint("RIGHT", rowCard, "RIGHT", -12, 0)
         statusPill:SetBackdrop(CARD_BACKDROP)
 
@@ -880,35 +884,6 @@ function WQT.RenderCurrentCharacterView(quests, startY)
             pillText:SetText(WQT.ICON_CROSS .. "  |cffe74c3cINCOMPLETE|r")
         end
 
-        -- Smart Navigation Button (Feature 1)
-        local navBtn = CreateFrame("Button", nil, rowCard, "BackdropTemplate")
-        navBtn:SetSize(96, 26)
-        navBtn:SetPoint("RIGHT", statusPill, "LEFT", -8, 0)
-        navBtn:SetBackdrop(CARD_BACKDROP)
-        navBtn:SetBackdropColor(0.10, 0.16, 0.24, 0.95)
-        navBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
-
-        local navText = navBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        navText:SetPoint("CENTER", 0, 0)
-        navText:SetText("|TInterface\\Icons\\inv_misc_compass_01:13:13:0:0|t |cff00e5ffNavigate|r")
-
-        navBtn:SetScript("OnEnter", function(self)
-            self:SetBackdropColor(0.16, 0.26, 0.38, 1)
-            self:SetBackdropBorderColor(0.2, 0.95, 1.0, 1)
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:AddLine("Set Waypoint: " .. qName, 1, 0.82, 0)
-            GameTooltip:AddLine("Places a map pin & in-game arrow pointing directly to this quest.", 0.8, 0.8, 0.8, true)
-            GameTooltip:Show()
-        end)
-        navBtn:SetScript("OnLeave", function(self)
-            self:SetBackdropColor(0.10, 0.16, 0.24, 0.95)
-            self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
-            GameTooltip:Hide()
-        end)
-        navBtn:SetScript("OnClick", function()
-            WQT.SetWaypoint(qName, q.ids)
-        end)
-
         rowCard:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         rowCard:SetScript("OnEnter", function(self)
             self:SetBackdropBorderColor(1.0, 0.85, 0.2, 1)
@@ -917,8 +892,7 @@ function WQT.RenderCurrentCharacterView(quests, startY)
             GameTooltip:AddLine("Status: " .. state, 1, 1, 1)
             GameTooltip:AddLine("Tracked IDs: " .. table.concat(q.ids or {}, ", "), 0.7, 0.7, 0.7)
             GameTooltip:AddLine(" ", 1, 1, 1)
-            GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Navigation Waypoint & Map Pin", 0, 0.9, 1)
-            GameTooltip:AddLine("|cffffcc00Shift + Left-Click:|r Cycle status manually", 0.9, 0.9, 0.2)
+            GameTooltip:AddLine("|cffffcc00Shift + Left-Click: Cycle status manually|r", 0.9, 0.9, 0.2)
             GameTooltip:Show()
         end)
         rowCard:SetScript("OnLeave", function(self)
@@ -936,8 +910,6 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         rowCard:SetScript("OnClick", function(self, button)
             if IsShiftKeyDown() and button == "LeftButton" then
                 WQT.ToggleQuestStatus(currentKey, qName)
-            elseif button == "LeftButton" then
-                WQT.SetWaypoint(qName, q.ids)
             end
         end)
 
@@ -988,11 +960,9 @@ function WQT.RenderGridView(sortedChars, quests, startY)
         qText:SetJustifyH("CENTER")
         qText:SetText("|cffffd100" .. q.name .. "|r")
 
-        qHeader:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        qHeader:RegisterForClicks("RightButtonUp")
         qHeader:SetScript("OnClick", function(self, btn)
-            if btn == "LeftButton" then
-                WQT.SetWaypoint(q.name, q.ids)
-            elseif btn == "RightButton" then
+            if btn == "RightButton" then
                 StaticPopupDialogs["WQT_CONFIRM_REMOVE_QUEST"] = {
                     text = "Do you want to stop tracking quest:\n|cffffd100" .. q.name .. "|r?",
                     button1 = "Yes",
@@ -1009,9 +979,7 @@ function WQT.RenderGridView(sortedChars, quests, startY)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(q.name, 1, 0.82, 0)
             GameTooltip:AddLine("Tracked IDs: " .. table.concat(q.ids or {}, ", "), 0.7, 0.7, 0.7)
-            GameTooltip:AddLine(" ", 1, 1, 1)
-            GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Waypoint on Map & Navigation Arrow", 0, 0.9, 1)
-            GameTooltip:AddLine("|cffff4444Right-Click:|r Stop tracking quest", 0.9, 0.3, 0.3)
+            GameTooltip:AddLine("|cffff4444Right-Click to remove quest|r", 0.9, 0.3, 0.3)
             GameTooltip:Show()
         end)
         qHeader:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1324,16 +1292,12 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
                 qBtn:SetScript("OnClick", function()
                     if IsShiftKeyDown() then
                         WQT.ToggleQuestStatus(charKey, item.name)
-                    else
-                        WQT.SetWaypoint(item.name)
                     end
                 end)
 
                 qBtn:SetScript("OnEnter", function(self)
                     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                     GameTooltip:AddLine(item.name, 1, 0.82, 0)
-                    GameTooltip:AddLine(" ", 1, 1, 1)
-                    GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Waypoint on Map & Navigation Arrow", 0, 0.9, 1)
                     GameTooltip:AddLine("|cffffcc00Shift + Left-Click:|r Cycle status manually", 0.9, 0.9, 0.2)
                     GameTooltip:Show()
                 end)
@@ -1588,6 +1552,17 @@ function WQT.RenderSettingsView(startY)
 
     -- Checkbox 5: Auto Open on Login
     CreateCheckbox(optBox, 330, -76, "Auto-open Tracker Window on Login", "autoOpenOnLogin", false)
+
+    -- Checkbox 6: On-Screen Mini HUD (Feature 2)
+    CreateCheckbox(optBox, 640, -76, "Show On-Screen Mini HUD Bar", "showMiniHUD", true, function(val)
+        if val then
+            local hud = WQT.CreateMiniHUD()
+            if hud then hud:Show(); WQT.UpdateMiniHUD() end
+        else
+            local hud = _G["WQT_MiniHUD"]
+            if hud then hud:Hide() end
+        end
+    end)
 
     currentY = currentY - 135
 
@@ -1963,6 +1938,213 @@ function WQT.CreateMinimapButton()
 end
 
 -- =========================================================================
+-- FEATURE 2: ON-SCREEN MINI HUD (FLOATING TRACKER BAR)
+-- =========================================================================
+local miniHUD = nil
+
+function WQT.CreateMiniHUD()
+    if miniHUD then return miniHUD end
+
+    local hud = CreateFrame("Frame", "WQT_MiniHUD", UIParent, "BackdropTemplate")
+    hud:SetSize(196, 30)
+    hud:SetFrameStrata("MEDIUM")
+    hud:SetClampedToScreen(true)
+    hud:SetMovable(true)
+    hud:EnableMouse(true)
+    hud:RegisterForDrag("LeftButton")
+
+    hud:SetBackdrop(CARD_BACKDROP)
+    hud:SetBackdropColor(0.06, 0.08, 0.12, 0.94)
+    hud:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+
+    -- Restore saved position or default to top center
+    local pos = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.hudPosition
+    if pos and pos.point and pos.x and pos.y then
+        hud:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
+    else
+        hud:SetPoint("TOP", UIParent, "TOP", 0, -35)
+    end
+
+    hud:SetScript("OnDragStart", function(self)
+        self:StartMoving()
+    end)
+    hud:SetScript("OnDragStop", function(self)
+        self:StopMovingOrSizing()
+        local pt, _, relPt, x, y = self:GetPoint()
+        if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings then
+            WeeklyQuestTrackerDB.settings.hudPosition = { point = pt, relPoint = relPt, x = x, y = y }
+        end
+    end)
+
+    -- Left Icon Badge (Tiny Compass or chosen icon)
+    local iconTex = hud:CreateTexture(nil, "ARTWORK")
+    iconTex:SetSize(16, 16)
+    iconTex:SetPoint("LEFT", 7, 0)
+    local curIcon = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.iconTexture) or "Interface\\Icons\\inv_misc_compass_01"
+    iconTex:SetTexture(curIcon)
+    hud.iconTex = iconTex
+
+    -- 6 Quest Indicator Slots (Spacing: ~18px apart)
+    local slots = {}
+    local startX = 28
+    for i = 1, 6 do
+        local slot = CreateFrame("Button", nil, hud)
+        slot:SetSize(18, 18)
+        slot:SetPoint("LEFT", hud, "LEFT", startX + (i - 1) * 20, 0)
+
+        local slotIcon = slot:CreateTexture(nil, "ARTWORK")
+        slotIcon:SetAllPoints()
+        slotIcon:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+        slot.icon = slotIcon
+
+        slot:RegisterForClicks("LeftButtonUp")
+        slot:SetScript("OnClick", function()
+            WQT.ToggleUI()
+        end)
+
+        slot:SetScript("OnEnter", function(self)
+            if self.questName then
+                GameTooltip:SetOwner(self, "ANCHOR_TOP")
+                GameTooltip:AddLine(self.questName, 1, 0.82, 0)
+                GameTooltip:AddLine("Status: " .. (self.statusText or "Incomplete"), 1, 1, 1)
+                GameTooltip:AddLine(" ", 1, 1, 1)
+                GameTooltip:AddLine("|cff00ff00Click:|r Open Weekly Quest Tracker", 0.7, 0.7, 0.7)
+                GameTooltip:Show()
+            end
+        end)
+        slot:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+        slots[i] = slot
+    end
+    hud.slots = slots
+
+    -- Right Progress Label (e.g. "4/6")
+    local ratioText = hud:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ratioText:SetPoint("RIGHT", hud, "RIGHT", -7, 0)
+    ratioText:SetText("|cffffd1000/6|r")
+    hud.ratioText = ratioText
+
+    -- Main HUD Click & Hover
+    hud:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" then
+            WQT.ToggleUI()
+        end
+    end)
+
+    hud:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(1.0, 0.85, 0.2, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+        GameTooltip:AddLine(WQT.ADDON_TITLE .. " |cff888888(Mini HUD)|r", 1, 1, 1)
+
+        local currentKey = WQT.GetPlayerKey()
+        local charData = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.characters and WeeklyQuestTrackerDB.characters[currentKey]
+        if charData and charData.quests then
+            GameTooltip:AddLine("Current Alt: |cffffd100" .. (charData.name or "You") .. "|r", 1, 0.82, 0)
+            local quests = WeeklyQuestTrackerDB.quests or {}
+            for _, q in ipairs(quests) do
+                local status = charData.quests[q.name]
+                GameTooltip:AddDoubleLine(q.name, WQT.GetStatusString(status, true))
+            end
+        end
+
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("|cff00ff00Left-Click:|r Toggle Full Window", 0.7, 0.7, 0.7)
+        GameTooltip:AddLine("|cff00ff00Drag:|r Move Bar on Screen", 0.7, 0.7, 0.7)
+        GameTooltip:Show()
+    end)
+
+    hud:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+        GameTooltip:Hide()
+    end)
+
+    miniHUD = hud
+
+    -- Check visibility setting
+    if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.showMiniHUD == false then
+        miniHUD:Hide()
+    else
+        miniHUD:Show()
+    end
+
+    WQT.UpdateMiniHUD()
+    return miniHUD
+end
+
+function WQT.UpdateMiniHUD()
+    if not miniHUD then return end
+
+    local currentKey = WQT.GetPlayerKey()
+    local charData = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.characters and WeeklyQuestTrackerDB.characters[currentKey]
+    local charQuests = (charData and charData.quests) or {}
+    local quests = WeeklyQuestTrackerDB.quests or {}
+
+    local curIcon = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.iconTexture) or "Interface\\Icons\\inv_misc_compass_01"
+    if miniHUD.iconTex then miniHUD.iconTex:SetTexture(curIcon) end
+
+    local doneCount = 0
+    local totalQuests = #quests
+
+    for i = 1, 6 do
+        local slot = miniHUD.slots[i]
+        if slot then
+            local q = quests[i]
+            if q then
+                slot:Show()
+                slot.questName = q.name
+                local qs = charQuests[q.name]
+                local state = qs and qs.state or (qs and qs.completed and "DONE") or "INCOMPLETE"
+
+                if state == "DONE" then
+                    slot.icon:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+                    slot.statusText = "|cff2ecc71Done|r"
+                    doneCount = doneCount + 1
+                elseif state == "READY" then
+                    slot.icon:SetTexture("Interface\\GossipFrame\\ActiveQuestIcon")
+                    slot.statusText = "|cff00e5ffReady to Turn In|r"
+                elseif state == "PROGRESS" then
+                    slot.icon:SetTexture("Interface\\COMMON\\Indicator-Yellow")
+                    slot.statusText = "|cfff39c12In Progress|r"
+                else
+                    slot.icon:SetTexture("Interface\\RaidFrame\\ReadyCheck-NotReady")
+                    slot.statusText = "|cffe74c3cIncomplete|r"
+                end
+            else
+                slot:Hide()
+            end
+        end
+    end
+
+    if miniHUD.ratioText then
+        if doneCount == totalQuests and totalQuests > 0 then
+            miniHUD.ratioText:SetText(string.format("|cff2ecc71%d/%d|r", doneCount, totalQuests))
+            miniHUD:SetBackdropBorderColor(0.2, 0.85, 0.35, 0.95)
+        else
+            miniHUD.ratioText:SetText(string.format("|cffffcc00%d/%d|r", doneCount, totalQuests))
+            miniHUD:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+        end
+    end
+end
+
+function WQT.ToggleMiniHUD()
+    local hud = WQT.CreateMiniHUD()
+    if hud:IsShown() then
+        hud:Hide()
+        if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings then
+            WeeklyQuestTrackerDB.settings.showMiniHUD = false
+        end
+        print(string.format("%s: Mini HUD |cffff5555hidden|r. (Type /wqt hud to show)", WQT.ADDON_TITLE))
+    else
+        hud:Show()
+        if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings then
+            WeeklyQuestTrackerDB.settings.showMiniHUD = true
+        end
+        WQT.UpdateMiniHUD()
+        print(string.format("%s: Mini HUD |cff00ff00shown|r.", WQT.ADDON_TITLE))
+    end
+end
+
+-- =========================================================================
 -- TOGGLE MAIN FRAME
 -- =========================================================================
 function WQT.ToggleUI()
@@ -1978,13 +2160,14 @@ function WQT.ToggleUI()
     end
 end
 
--- Auto init map buttons upon loading
+-- Auto init map buttons and Mini HUD upon loading
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
 loader:RegisterEvent("PLAYER_ENTERING_WORLD")
 loader:SetScript("OnEvent", function()
     WQT.CreateMinimapButton()
     WQT.CreateWorldMapButton()
+    WQT.CreateMiniHUD()
 end)
 
 -- Also hook WorldMapFrame OnShow to ensure map button is always present
