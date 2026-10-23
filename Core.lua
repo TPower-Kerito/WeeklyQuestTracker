@@ -15,6 +15,8 @@ f:RegisterEvent("QUEST_ACCEPTED")
 f:RegisterEvent("QUEST_LOG_UPDATE")
 f:RegisterEvent("QUEST_WATCH_UPDATE")
 f:RegisterEvent("PLAYER_CAMPING")
+f:RegisterEvent("WEEKLY_REWARDS_UPDATE")
+f:RegisterEvent("WEEKLY_REWARDS_SHOW")
 
 -- Helper: Get current character key (e.g. "Thrall-TwistingNether")
 function WQT.GetPlayerKey()
@@ -161,6 +163,15 @@ function WQT.CheckWeeklyReset()
                     }
                 end
             end
+            if charData.vault then
+                charData.vault = {
+                    raid = 0,
+                    mythic = 0,
+                    world = 0,
+                    total = 0,
+                    lastUpdate = now,
+                }
+            end
         end
 
         WeeklyQuestTrackerDB.nextWeeklyReset = estimatedNextReset
@@ -208,6 +219,104 @@ function WQT.GetQuestStatus(questEntry)
     return "INCOMPLETE"
 end
 
+-- =========================================================================
+-- FEATURE 4: GREAT VAULT SUMMARY (RAID / MYTHIC+ / DELVES)
+-- =========================================================================
+function WQT.ScanGreatVault()
+    local raidUnlocked = 0
+    local mythicUnlocked = 0
+    local worldUnlocked = 0
+
+    if C_WeeklyRewards and C_WeeklyRewards.GetActivities then
+        local raidType = Enum and Enum.WeeklyRewardChestThresholdType and Enum.WeeklyRewardChestThresholdType.Raid
+        local mythicType = Enum and Enum.WeeklyRewardChestThresholdType and (Enum.WeeklyRewardChestThresholdType.MythicPlus or Enum.WeeklyRewardChestThresholdType.Activities)
+        local worldType = Enum and Enum.WeeklyRewardChestThresholdType and Enum.WeeklyRewardChestThresholdType.World
+
+        local function checkActivitiesList(acts, targetType, fallbackNum)
+            local count = 0
+            for _, act in ipairs(acts or {}) do
+                local matches = false
+                if targetType and act.type == targetType then
+                    matches = true
+                elseif fallbackNum and act.type == fallbackNum then
+                    matches = true
+                elseif not targetType and not fallbackNum then
+                    matches = true
+                end
+
+                if matches then
+                    local prog = act.progress or 0
+                    local thresh = act.threshold or 0
+                    if thresh > 0 and prog >= thresh then
+                        count = count + 1
+                    end
+                end
+            end
+            return count
+        end
+
+        local allActs = C_WeeklyRewards.GetActivities() or {}
+        if #allActs > 0 then
+            raidUnlocked = checkActivitiesList(allActs, raidType, 3)
+            mythicUnlocked = checkActivitiesList(allActs, mythicType, 1)
+            worldUnlocked = checkActivitiesList(allActs, worldType, 4)
+            if worldUnlocked == 0 and worldType then
+                worldUnlocked = checkActivitiesList(allActs, worldType, nil)
+            end
+        else
+            if raidType then raidUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(raidType)) end
+            if mythicType then mythicUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(mythicType)) end
+            if worldType then worldUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(worldType)) end
+        end
+    end
+
+    raidUnlocked = math.min(math.max(raidUnlocked, 0), 3)
+    mythicUnlocked = math.min(math.max(mythicUnlocked, 0), 3)
+    worldUnlocked = math.min(math.max(worldUnlocked, 0), 3)
+
+    return {
+        raid = raidUnlocked,
+        mythic = mythicUnlocked,
+        world = worldUnlocked,
+        total = raidUnlocked + mythicUnlocked + worldUnlocked,
+        lastUpdate = time(),
+    }
+end
+
+function WQT.PrintVaultSummary()
+    local allChars = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.characters or {}
+    local currentKey = WQT.GetPlayerKey()
+    print(string.format("%s: |cffffcc00=== Great Vault Weekly Summary ===|r", WQT.ADDON_TITLE))
+
+    local sorted = {}
+    for k, v in pairs(allChars) do
+        table.insert(sorted, { key = k, data = v })
+    end
+    table.sort(sorted, function(a, b)
+        if a.key == currentKey then return true end
+        if b.key == currentKey then return false end
+        return (a.data.name or "") < (b.data.name or "")
+    end)
+
+    if #sorted == 0 then
+        print("  (No characters tracked yet)")
+        return
+    end
+
+    for _, item in ipairs(sorted) do
+        local cData = item.data
+        local v = cData.vault or { raid = 0, mythic = 0, world = 0, total = 0 }
+        local _, _, _, hex = WQT.GetClassColor(cData.class)
+        local tag = (item.key == currentKey) and " |cff00e5ff(Current Alt)|r" or ""
+        print(string.format("  • |c%s%s|r%s: |cffffffffRaid:|r |c%s%d/3|r | |cffffffffMythic:|r |c%s%d/3|r | |cffffffffDelves:|r |c%s%d/3|r (|cffffcc00Total: %d/9|r)",
+            hex or "ffffffff", cData.name or item.key, tag,
+            v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid,
+            v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic,
+            v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world,
+            v.total))
+    end
+end
+
 -- Scan the currently logged-in character's quest status
 function WQT.ScanCurrentCharacter()
     if not WeeklyQuestTrackerDB or not WeeklyQuestTrackerDB.characters then return end
@@ -244,6 +353,9 @@ function WQT.ScanCurrentCharacter()
             lastCheck = time(),
         }
     end
+
+    -- Feature 4: Scan and update Great Vault slot counts
+    WeeklyQuestTrackerDB.characters[charKey].vault = WQT.ScanGreatVault()
 
     WeeklyQuestTrackerDB.characters[charKey].lastUpdate = time()
 
@@ -547,6 +659,8 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         if WQT.ToggleMiniHUD then WQT.ToggleMiniHUD() end
     elseif cmd == "reminder" or cmd == "testlogout" then
         WQT.CheckAndShowLogoutReminder(true)
+    elseif cmd == "vault" or cmd == "gv" or cmd == "bank" then
+        WQT.PrintVaultSummary()
     elseif cmd == "add" and arg1 then
         local qid = tonumber(arg1)
         local qname = arg2 and msg:match("add%s+%d+%s+(.+)")
@@ -559,6 +673,7 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         print(string.format("%s Commands:", WQT.ADDON_TITLE))
         print("  |cff00ff00/wqt|r - Toggle tracker window")
         print("  |cff00ff00/wqt hud|r - Toggle Mini HUD floating bar on screen")
+        print("  |cff00ff00/wqt vault|r - Show Great Vault summary across all alts")
         print("  |cff00ff00/wqt reminder|r - Test logout reminder alert")
         print("  |cff00ff00/wqt scan|r - Re-scan current character")
         print("  |cff00ff00/wqt check [name]|r - Inspect quests and IDs in your log")
@@ -586,6 +701,10 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
         end)
     elseif event == "PLAYER_CAMPING" then
         WQT.CheckAndShowLogoutReminder(false)
+    elseif event == "WEEKLY_REWARDS_UPDATE" or event == "WEEKLY_REWARDS_SHOW" then
+        C_Timer.After(0.5, function()
+            WQT.ScanCurrentCharacter()
+        end)
     elseif event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" or event == "QUEST_ACCEPTED" or event == "QUEST_LOG_UPDATE" or event == "QUEST_WATCH_UPDATE" then
         C_Timer.After(0.5, function()
             WQT.ScanCurrentCharacter()

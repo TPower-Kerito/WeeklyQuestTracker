@@ -797,6 +797,62 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         WQT.ICON_PROGRESS, progressCount,
         WQT.ICON_CROSS, incompleteCount))
 
+    -- Center: Feature 4 - Great Vault Summary Badge
+    local vData = (charData and charData.vault) or { raid = 0, mythic = 0, world = 0, total = 0 }
+    local vaultWidget = CreateFrame("Button", nil, heroCard, "BackdropTemplate")
+    vaultWidget:SetPoint("CENTER", heroCard, "CENTER", -10, -2)
+    vaultWidget:SetSize(310, 68)
+    vaultWidget:SetBackdrop(CARD_BACKDROP)
+    vaultWidget:SetBackdropColor(0.08, 0.10, 0.15, 0.95)
+    vaultWidget:SetBackdropBorderColor(0.90, 0.75, 0.20, 0.85)
+
+    local vIcon = vaultWidget:CreateTexture(nil, "ARTWORK")
+    vIcon:SetSize(22, 22)
+    vIcon:SetPoint("TOPLEFT", 10, -8)
+    vIcon:SetTexture("Interface\\Icons\\inv_misc_coin_17")
+    vIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    local vTitle = vaultWidget:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    vTitle:SetPoint("LEFT", vIcon, "RIGHT", 6, 0)
+    vTitle:SetText(string.format("|cffffd100Great Vault:|r |cffffcc00%d / 9 Unlocked|r", vData.total))
+
+    local vBreakdown = vaultWidget:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    vBreakdown:SetPoint("BOTTOMLEFT", 10, 10)
+    vBreakdown:SetText(string.format("|cffffffffRaid:|r |c%s%d/3|r   |cffffffffMythic:|r |c%s%d/3|r   |cffffffffDelves:|r |c%s%d/3|r",
+        vData.raid > 0 and "ff2ecc71" or "ffaaaaaa", vData.raid,
+        vData.mythic > 0 and "ff2ecc71" or "ffaaaaaa", vData.mythic,
+        vData.world > 0 and "ff2ecc71" or "ffaaaaaa", vData.world))
+
+    vaultWidget:SetScript("OnEnter", function(self)
+        self:SetBackdropBorderColor(1.0, 0.9, 0.3, 1)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Great Vault Summary (Weekly)", 1, 0.82, 0)
+        GameTooltip:AddLine("Weekly bank reward choices unlocked for this character:", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddDoubleLine("• Raid Encounters:", string.format("|c%s%d / 3 Slots|r", vData.raid > 0 and "ff2ecc71" or "ffaaaaaa", vData.raid), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("• Mythic Dungeons:", string.format("|c%s%d / 3 Slots|r", vData.mythic > 0 and "ff2ecc71" or "ffaaaaaa", vData.mythic), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddDoubleLine("• World & Delves:", string.format("|c%s%d / 3 Slots|r", vData.world > 0 and "ff2ecc71" or "ffaaaaaa", vData.world), 1, 1, 1, 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddDoubleLine("Total Choices Available:", string.format("|c%s%d / 9 Slots|r", vData.total > 0 and "ffffcc00" or "ff888888", vData.total), 1, 0.82, 0, 1, 1, 1)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("|cff00ff00Click to open Great Vault window|r", 0.2, 1, 0.4)
+        GameTooltip:Show()
+    end)
+    vaultWidget:SetScript("OnLeave", function(self)
+        self:SetBackdropBorderColor(0.90, 0.75, 0.20, 0.85)
+        GameTooltip:Hide()
+    end)
+    vaultWidget:SetScript("OnClick", function()
+        pcall(function()
+            if not WeeklyRewardsFrame then
+                if WeeklyRewards_LoadUI then WeeklyRewards_LoadUI() end
+            end
+            if WeeklyRewards_ShowUI then
+                WeeklyRewards_ShowUI()
+            end
+        end)
+    end)
+
     currentY = currentY - 108
 
     -- 2. Section Header: Weekly Tasks List
@@ -1013,17 +1069,35 @@ function WQT.RenderGridView(sortedChars, quests, startY)
         charBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
         charBtn:SetSize(colCharWidth - 8, rowHeight)
 
+        local v = charData.vault or { raid = 0, mythic = 0, world = 0, total = 0 }
         local charLabel = charBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         charLabel:SetPoint("LEFT", 4, 0)
         local charPrefix = isCurrentChar and "|cff00e5ff[You] |r" or ""
         local charSuffix = isCurrentChar and " |cff00e5ff(You)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+        if v and v.total and v.total > 0 then
+            charSuffix = charSuffix .. string.format(" |cffffcc00[%d/9]|r", v.total)
+        end
         charLabel:SetText(charPrefix .. GetFormattedName(charData) .. charSuffix)
 
-        charBtn:SetScript("OnEnter", function()
+        charBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        charBtn:SetScript("OnEnter", function(self)
             if not isCurrentChar then
                 row:SetBackdropColor(0.20, 0.24, 0.32, 1)
                 row:SetBackdropBorderColor(0.4, 0.5, 0.7, 0.8)
             end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(GetFormattedName(charData) .. string.format(" |cff888888(%s)|r", charData.realm or ""), 1, 0.82, 0)
+            GameTooltip:AddLine(string.format("Level %d %s", charData.level or 90, charData.class or ""), 0.8, 0.8, 0.8)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("|cffffd100Great Vault Weekly Status:|r", 1, 0.82, 0)
+            GameTooltip:AddDoubleLine("  • Raid Encounters:", string.format("|c%s%d / 3 Slots|r", v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("  • Mythic Dungeons:", string.format("|c%s%d / 3 Slots|r", v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("  • Delves & World:", string.format("|c%s%d / 3 Slots|r", v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("  Total Choices Unlocked:", string.format("|c%s%d / 9 Slots|r", v.total > 0 and "ffffcc00" or "ff888888", v.total), 1, 0.82, 0, 1, 1, 1)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("|cff00ff00Left-Click: Open Great Vault window|r", 0.2, 1, 0.4)
+            GameTooltip:AddLine("|cffff4444Right-Click: Remove alt from tracker|r", 0.9, 0.3, 0.3)
+            GameTooltip:Show()
         end)
         charBtn:SetScript("OnLeave", function()
             if not isCurrentChar then
@@ -1033,9 +1107,9 @@ function WQT.RenderGridView(sortedChars, quests, startY)
                 row:SetBackdropColor(baseBgR, baseBgG, baseBgB, 0.9)
                 row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
             end
+            GameTooltip:Hide()
         end)
 
-        charBtn:RegisterForClicks("RightButtonUp")
         charBtn:SetScript("OnClick", function(self, btn)
             if btn == "RightButton" then
                 StaticPopupDialogs["WQT_CONFIRM_REMOVE_CHAR"] = {
@@ -1048,6 +1122,15 @@ function WQT.RenderGridView(sortedChars, quests, startY)
                     hideOnEscape = true,
                 }
                 StaticPopup_Show("WQT_CONFIRM_REMOVE_CHAR")
+            elseif btn == "LeftButton" then
+                pcall(function()
+                    if not WeeklyRewardsFrame then
+                        if WeeklyRewards_LoadUI then WeeklyRewards_LoadUI() end
+                    end
+                    if WeeklyRewards_ShowUI then
+                        WeeklyRewards_ShowUI()
+                    end
+                end)
             end
         end)
 
@@ -1096,7 +1179,7 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
     local currentY = startY or 0
     local isLeft = true
     local totalQuests = #quests
-    local cardHeight = 65 + (totalQuests * 22)
+    local cardHeight = 65 + (totalQuests * 22) + 26
     local currentKey = WQT.GetPlayerKey()
 
     for index, charItem in ipairs(sortedChars) do
@@ -1189,6 +1272,53 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
 
             qItemY = qItemY - 22
         end
+
+        -- Feature 4: Great Vault Footer in Card
+        local v = charData.vault or { raid = 0, mythic = 0, world = 0, total = 0 }
+        local vLine = card:CreateTexture(nil, "ARTWORK")
+        vLine:SetHeight(1)
+        vLine:SetPoint("TOPLEFT", 12, qItemY - 2)
+        vLine:SetPoint("TOPRIGHT", -12, qItemY - 2)
+        vLine:SetColorTexture(0.25, 0.32, 0.44, 0.5)
+
+        local vFooter = CreateFrame("Button", nil, card)
+        vFooter:SetPoint("TOPLEFT", 12, qItemY - 4)
+        vFooter:SetSize(cardWidth - 24, 22)
+
+        local vText = vFooter:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        vText:SetPoint("LEFT", 2, 0)
+        vText:SetText(string.format("|TInterface\\Icons\\inv_misc_coin_17:13:13:0:0:64:64:4:60:4:60|t |cffffd100Vault:|r |cffffffffR:|r |c%s%d/3|r  |cffffffffM:|r |c%s%d/3|r  |cffffffffD:|r |c%s%d/3|r",
+            v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid,
+            v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic,
+            v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world))
+
+        local vTotal = vFooter:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        vTotal:SetPoint("RIGHT", -2, 0)
+        vTotal:SetText(string.format("|c%s%d / 9 Slots|r", v.total > 0 and "ffffcc00" or "ff888888", v.total))
+
+        vFooter:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine((charData.name or "Character") .. " - Great Vault", 1, 0.82, 0)
+            GameTooltip:AddDoubleLine("• Raid Encounters:", string.format("|c%s%d / 3 Slots|r", v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("• Mythic Dungeons:", string.format("|c%s%d / 3 Slots|r", v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddDoubleLine("• Delves & World:", string.format("|c%s%d / 3 Slots|r", v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world), 1, 1, 1, 1, 1, 1)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddDoubleLine("Total Choices Available:", string.format("|c%s%d / 9 Slots|r", v.total > 0 and "ffffcc00" or "ff888888", v.total), 1, 0.82, 0, 1, 1, 1)
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("|cff00ff00Click: Open Great Vault window|r", 0.2, 1, 0.4)
+            GameTooltip:Show()
+        end)
+        vFooter:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        vFooter:SetScript("OnClick", function()
+            pcall(function()
+                if not WeeklyRewardsFrame then
+                    if WeeklyRewards_LoadUI then WeeklyRewards_LoadUI() end
+                end
+                if WeeklyRewards_ShowUI then
+                    WeeklyRewards_ShowUI()
+                end
+            end)
+        end)
 
         if not isLeft then
             currentY = currentY - (cardHeight + 12)
@@ -1566,6 +1696,11 @@ function WQT.RenderSettingsView(startY)
 
     -- Checkbox 7: Alt Incomplete Reminder on Logout (Feature 3)
     CreateCheckbox(optBox, 14, -114, "Alt Incomplete Reminder on Logout", "logoutReminder", true)
+
+    -- Checkbox 8: Great Vault Summary (Feature 4)
+    CreateCheckbox(optBox, 330, -114, "Show Great Vault Badges (R/M/D)", "showGreatVault", true, function()
+        WQT.RefreshUI()
+    end)
 
     currentY = currentY - 175
 
@@ -2062,6 +2197,16 @@ function WQT.CreateMiniHUD()
                 local status = charData.quests[q.name]
                 GameTooltip:AddDoubleLine(q.name, WQT.GetStatusString(status, true))
             end
+        end
+
+        if charData and charData.vault then
+            local v = charData.vault
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddDoubleLine("|cffffd100Great Vault:|r", string.format("R: |c%s%d/3|r  M: |c%s%d/3|r  D: |c%s%d/3|r (|cffffcc00%d/9|r)",
+                v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid,
+                v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic,
+                v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world,
+                v.total))
         end
 
         GameTooltip:AddLine(" ")
