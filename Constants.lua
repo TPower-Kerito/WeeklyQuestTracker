@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.1.0"
+WQT.VERSION = "1.1.1"
 WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
 
 -- Available Minimap / Header Icons for User Selection
@@ -61,6 +61,52 @@ WQT.DEFAULT_QUESTS = {
         name = "Turn Back the Surge",
         ids = { 96995 },
         isWeekly = true,
+    },
+}
+
+-- Predefined Quest Waypoints & Navigation Objectives
+WQT.QUEST_WAYPOINTS = {
+    ["Fortify the Runestones"] = {
+        mapID = 2248, -- Isle of Dorn / Hallowfall Defense
+        x = 0.485,
+        y = 0.458,
+        zone = "Isle of Dorn",
+        desc = "Defense Hub",
+    },
+    ["Abundant Offerings"] = {
+        mapID = 2248, -- Isle of Dorn / Loa of Abundance Harvest
+        x = 0.472,
+        y = 0.421,
+        zone = "Isle of Dorn",
+        desc = "Weekly Harvest Hub",
+    },
+    ["The Story of the Root of the World"] = {
+        mapID = 2214, -- The Ringing Deeps / Haranir Roots
+        x = 0.490,
+        y = 0.380,
+        zone = "The Ringing Deeps",
+        desc = "Haranir Roots & Sacred Legends",
+    },
+    ["Trailing Xal'atath"] = {
+        mapID = 2339, -- Dornogal
+        x = 0.482,
+        y = 0.460,
+        zone = "Dornogal",
+        desc = "Storyline Investigation Hub",
+    },
+    ["Unity Against the Void"] = {
+        mapID = 2339, -- Dornogal / Arcantina
+        x = 0.495,
+        y = 0.445,
+        zone = "Dornogal",
+        desc = "Choice Hub (Arcantina / Delves / Rituals)",
+    },
+    ["Turn Back the Surge"] = {
+        mapID = 2369, -- The Siren Isle / Coiled Isle
+        x = 0.520,
+        y = 0.480,
+        zone = "The Coiled Isle",
+        desc = "Cursed Surge Public Event",
     },
 }
 

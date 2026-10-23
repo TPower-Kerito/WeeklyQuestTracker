@@ -366,6 +366,95 @@ function WQT.RemoveCharacter(charKey)
     end
 end
 
+-- =========================================================================
+-- FEATURE 1: SMART NAVIGATION & WAYPOINT SYSTEM
+-- =========================================================================
+function WQT.GetQuestWaypoint(questName, questIDs)
+    if not questName then return nil end
+
+    -- 1. If active in quest log, query live position from WoW engine
+    if questIDs then
+        for _, id in ipairs(questIDs) do
+            if C_QuestLog and C_QuestLog.IsOnQuest and C_QuestLog.IsOnQuest(id) then
+                local bestMap = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                if bestMap and C_QuestLog.GetQuestPosition then
+                    local x, y = C_QuestLog.GetQuestPosition(id, bestMap)
+                    if x and y and x > 0 and y > 0 then
+                        return bestMap, x, y, "Active Quest Objective"
+                    end
+                end
+            end
+        end
+    end
+
+    -- 2. Fallback to predefined quest waypoints
+    if WQT.QUEST_WAYPOINTS then
+        if WQT.QUEST_WAYPOINTS[questName] then
+            local wp = WQT.QUEST_WAYPOINTS[questName]
+            return wp.mapID, wp.x, wp.y, wp.desc or questName
+        end
+
+        -- Partial search match
+        local lowerName = questName:lower()
+        for k, wp in pairs(WQT.QUEST_WAYPOINTS) do
+            if k:lower():find(lowerName, 1, true) or lowerName:find(k:lower(), 1, true) then
+                return wp.mapID, wp.x, wp.y, wp.desc or k
+            end
+        end
+    end
+
+    return nil
+end
+
+function WQT.SetWaypoint(questName, questIDs)
+    local mapID, x, y, desc = WQT.GetQuestWaypoint(questName, questIDs)
+    if not mapID or not x or not y then
+        print(string.format("%s: No map coordinates found for '|cffffd100%s|r'.", WQT.ADDON_TITLE, questName or "Quest"))
+        return false
+    end
+
+    local waypointPlaced = false
+
+    -- 1. Blizzard Native User Waypoint (The War Within & Midnight Retail API)
+    pcall(function()
+        if C_Map and C_Map.SetUserWaypoint and UiMapPoint then
+            local point = UiMapPoint.CreateFromCoordinates(mapID, x, y)
+            C_Map.SetUserWaypoint(point)
+            if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then
+                C_SuperTrack.SetSuperTrackedUserWaypoint(true)
+            end
+            waypointPlaced = true
+        end
+    end)
+
+    -- 2. TomTom integration (if loaded by player)
+    pcall(function()
+        if _G["TomTom"] and _G["TomTom"].AddWaypoint then
+            _G["TomTom"]:AddWaypoint(mapID, x, y, {
+                title = string.format("%s: %s", WQT.ADDON_TITLE, questName),
+                persistent = false,
+                minimap = true,
+                world = true
+            })
+            waypointPlaced = true
+        end
+    end)
+
+    if waypointPlaced then
+        local mapInfo = C_Map and C_Map.GetMapInfo and C_Map.GetMapInfo(mapID)
+        local mapName = (mapInfo and mapInfo.name) or "World Map"
+        print(string.format("%s: Waypoint set for |cffffd100%s|r in |cff00e5ff%s|r (%.1f, %.1f) - Follow the Navigation Arrow!",
+            WQT.ADDON_TITLE, questName, mapName, x * 100, y * 100))
+        if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+            PlaySound(SOUNDKIT.UI_MAP_WAYPOINT_CHAT_SHARED or SOUNDKIT.IG_QUEST_LIST_OPEN)
+        end
+        return true
+    else
+        print(string.format("%s: Could not place waypoint on map.", WQT.ADDON_TITLE))
+        return false
+    end
+end
+
 -- Diagnostic: Inspect Active and Completed Quests
 function WQT.CheckQuests(searchFilter)
     searchFilter = (searchFilter or ""):lower():match("^%s*(.-)%s*$")
@@ -425,6 +514,13 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
     elseif cmd == "reset" then
         WeeklyQuestTrackerDB.nextWeeklyReset = 0
         WQT.CheckWeeklyReset()
+    elseif cmd == "nav" or cmd == "way" or cmd == "goto" then
+        local targetQuest = msg:match("^(?:%S+)%s+(.+)$") or arg1
+        if targetQuest and targetQuest ~= "" then
+            WQT.SetWaypoint(targetQuest)
+        else
+            print(string.format("%s: Usage: /wqt nav <Quest Name>", WQT.ADDON_TITLE))
+        end
     elseif cmd == "add" and arg1 then
         local qid = tonumber(arg1)
         local qname = arg2 and msg:match("add%s+%d+%s+(.+)")
@@ -437,6 +533,7 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         print(string.format("%s Commands:", WQT.ADDON_TITLE))
         print("  |cff00ff00/wqt|r - Toggle tracker window")
         print("  |cff00ff00/wqt scan|r - Re-scan current character")
+        print("  |cff00ff00/wqt nav <name>|r - Set Waypoint & Navigation Arrow to quest")
         print("  |cff00ff00/wqt check [name]|r - Inspect quests and IDs in your log")
         print("  |cff00ff00/wqt add <QuestID> [Name]|r - Add a new quest")
         print("  |cff00ff00/wqt reset|r - Force weekly reset check")

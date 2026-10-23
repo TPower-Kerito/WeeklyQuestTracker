@@ -855,7 +855,7 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         qTitle:SetText("|cffffd100" .. qName .. "|r")
 
         local statusPill = CreateFrame("Frame", nil, rowCard, "BackdropTemplate")
-        statusPill:SetSize(185, 30)
+        statusPill:SetSize(175, 30)
         statusPill:SetPoint("RIGHT", rowCard, "RIGHT", -12, 0)
         statusPill:SetBackdrop(CARD_BACKDROP)
 
@@ -880,6 +880,35 @@ function WQT.RenderCurrentCharacterView(quests, startY)
             pillText:SetText(WQT.ICON_CROSS .. "  |cffe74c3cINCOMPLETE|r")
         end
 
+        -- Smart Navigation Button (Feature 1)
+        local navBtn = CreateFrame("Button", nil, rowCard, "BackdropTemplate")
+        navBtn:SetSize(96, 26)
+        navBtn:SetPoint("RIGHT", statusPill, "LEFT", -8, 0)
+        navBtn:SetBackdrop(CARD_BACKDROP)
+        navBtn:SetBackdropColor(0.10, 0.16, 0.24, 0.95)
+        navBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+
+        local navText = navBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        navText:SetPoint("CENTER", 0, 0)
+        navText:SetText("|TInterface\\Icons\\inv_misc_compass_01:13:13:0:0|t |cff00e5ffNavigate|r")
+
+        navBtn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(0.16, 0.26, 0.38, 1)
+            self:SetBackdropBorderColor(0.2, 0.95, 1.0, 1)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine("Set Waypoint: " .. qName, 1, 0.82, 0)
+            GameTooltip:AddLine("Places a map pin & in-game arrow pointing directly to this quest.", 0.8, 0.8, 0.8, true)
+            GameTooltip:Show()
+        end)
+        navBtn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(0.10, 0.16, 0.24, 0.95)
+            self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+            GameTooltip:Hide()
+        end)
+        navBtn:SetScript("OnClick", function()
+            WQT.SetWaypoint(qName, q.ids)
+        end)
+
         rowCard:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         rowCard:SetScript("OnEnter", function(self)
             self:SetBackdropBorderColor(1.0, 0.85, 0.2, 1)
@@ -888,7 +917,8 @@ function WQT.RenderCurrentCharacterView(quests, startY)
             GameTooltip:AddLine("Status: " .. state, 1, 1, 1)
             GameTooltip:AddLine("Tracked IDs: " .. table.concat(q.ids or {}, ", "), 0.7, 0.7, 0.7)
             GameTooltip:AddLine(" ", 1, 1, 1)
-            GameTooltip:AddLine("|cffffcc00Shift + Left-Click: Cycle status manually|r", 0.9, 0.9, 0.2)
+            GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Navigation Waypoint & Map Pin", 0, 0.9, 1)
+            GameTooltip:AddLine("|cffffcc00Shift + Left-Click:|r Cycle status manually", 0.9, 0.9, 0.2)
             GameTooltip:Show()
         end)
         rowCard:SetScript("OnLeave", function(self)
@@ -906,6 +936,8 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         rowCard:SetScript("OnClick", function(self, button)
             if IsShiftKeyDown() and button == "LeftButton" then
                 WQT.ToggleQuestStatus(currentKey, qName)
+            elseif button == "LeftButton" then
+                WQT.SetWaypoint(qName, q.ids)
             end
         end)
 
@@ -956,9 +988,11 @@ function WQT.RenderGridView(sortedChars, quests, startY)
         qText:SetJustifyH("CENTER")
         qText:SetText("|cffffd100" .. q.name .. "|r")
 
-        qHeader:RegisterForClicks("RightButtonUp")
+        qHeader:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         qHeader:SetScript("OnClick", function(self, btn)
-            if btn == "RightButton" then
+            if btn == "LeftButton" then
+                WQT.SetWaypoint(q.name, q.ids)
+            elseif btn == "RightButton" then
                 StaticPopupDialogs["WQT_CONFIRM_REMOVE_QUEST"] = {
                     text = "Do you want to stop tracking quest:\n|cffffd100" .. q.name .. "|r?",
                     button1 = "Yes",
@@ -975,7 +1009,9 @@ function WQT.RenderGridView(sortedChars, quests, startY)
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
             GameTooltip:AddLine(q.name, 1, 0.82, 0)
             GameTooltip:AddLine("Tracked IDs: " .. table.concat(q.ids or {}, ", "), 0.7, 0.7, 0.7)
-            GameTooltip:AddLine("|cffff4444Right-Click to remove quest|r", 0.9, 0.3, 0.3)
+            GameTooltip:AddLine(" ", 1, 1, 1)
+            GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Waypoint on Map & Navigation Arrow", 0, 0.9, 1)
+            GameTooltip:AddLine("|cffff4444Right-Click:|r Stop tracking quest", 0.9, 0.3, 0.3)
             GameTooltip:Show()
         end)
         qHeader:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1288,8 +1324,20 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
                 qBtn:SetScript("OnClick", function()
                     if IsShiftKeyDown() then
                         WQT.ToggleQuestStatus(charKey, item.name)
+                    else
+                        WQT.SetWaypoint(item.name)
                     end
                 end)
+
+                qBtn:SetScript("OnEnter", function(self)
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:AddLine(item.name, 1, 0.82, 0)
+                    GameTooltip:AddLine(" ", 1, 1, 1)
+                    GameTooltip:AddLine("|cff00e5ffLeft-Click:|r Set Waypoint on Map & Navigation Arrow", 0, 0.9, 1)
+                    GameTooltip:AddLine("|cffffcc00Shift + Left-Click:|r Cycle status manually", 0.9, 0.9, 0.2)
+                    GameTooltip:Show()
+                end)
+                qBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
                 mY = mY - 22
             end
