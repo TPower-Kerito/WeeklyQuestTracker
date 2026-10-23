@@ -1,10 +1,10 @@
 ## Interface: 120105, 120000, 110200, 110100
-## Title: |cff00ccffWeekly Quest Tracker|r
+## Title: |cff00e5ffWeekly Quest|r |cffffd100Tracker|r
 ## Notes: Tracks weekly quests across all characters with Grid, Cards, and To-Do views.
 ## Author: Antigravity
-## Version: 1.0.9
+## Version: 1.1.0
 ## SavedVariables: WeeklyQuestTrackerDB
-## IconTexture: Interface\Icons\INV_Misc_Book_09
+## IconTexture: Interface\Icons\inv_misc_compass_01
 ## AddonCompartmentFunc: WQT_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: WQT_OnAddonCompartmentEnter
 ## AddonCompartmentFuncOnLeave: WQT_OnAddonCompartmentLeave

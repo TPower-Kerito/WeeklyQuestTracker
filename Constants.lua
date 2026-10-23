@@ -8,8 +8,18 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.0.9"
-WQT.ADDON_TITLE = "|cff00ccffWeekly Quest Tracker|r"
+WQT.VERSION = "1.1.0"
+WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
+
+-- Available Minimap / Header Icons for User Selection
+WQT.AVAILABLE_ICONS = {
+    { id = "compass", name = "Golden Compass", texture = "Interface\\Icons\\inv_misc_compass_01", desc = "Radiant golden navigational compass (New Modern Default)" },
+    { id = "hourglass", name = "Hourglass of Time", texture = "Interface\\Icons\\inv_relics_hourglass", desc = "Mystic hourglass marking the weekly reset countdown" },
+    { id = "void", name = "Twilight Void", texture = "Interface\\Icons\\spell_shadow_twilight", desc = "Cosmic void twilight crest fitting the Midnight theme" },
+    { id = "keystone", name = "Mythic Star", texture = "Interface\\Icons\\achievement_dungeon_mythicplus", desc = "Radiant mythic keystone star emblem" },
+    { id = "pocketwatch", name = "Timekeeper Watch", texture = "Interface\\Icons\\inv_misc_pocketwatch_01", desc = "Antique golden pocketwatch tracking weekly timers" },
+    { id = "book", name = "Classic Tome", texture = "Interface\\Icons\\INV_Misc_Book_09", desc = "Original leatherbound quest log tome (Classic Look)" },
+}
 
 -- Default Tracked Quests
 WQT.DEFAULT_QUESTS = {
@@ -56,9 +66,13 @@ WQT.DEFAULT_QUESTS = {
 
 -- Default Addon Configuration
 WQT.DEFAULT_CONFIG = {
-    viewMode = "current", -- "current", "grid", "cards", or "todo"
+    viewMode = "current", -- "current", "grid", "cards", "todo", or "settings"
+    theme = "modern",    -- "modern" (Midnight Dark Glow) or "classic" (Slate)
+    iconTexture = "Interface\\Icons\\inv_misc_compass_01", -- New modern Golden Compass
     showMinimapButton = true,
     minimapAngle = 45,
+    showClassIcons = true,
+    highlightCurrentChar = true,
     autoOpenOnLogin = false,
     soundFeedback = true,
 }

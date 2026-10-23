@@ -126,6 +126,14 @@ function WQT.InitDB()
             WeeklyQuestTrackerDB.settings[k] = v
         end
     end
+
+    -- Upgrade old book icon to modern Golden Compass by default
+    if WeeklyQuestTrackerDB.settings.iconTexture == "Interface\\Icons\\INV_Misc_Book_09" or not WeeklyQuestTrackerDB.settings.iconTexture then
+        WeeklyQuestTrackerDB.settings.iconTexture = "Interface\\Icons\\inv_misc_compass_01"
+    end
+    if not WeeklyQuestTrackerDB.settings.theme then
+        WeeklyQuestTrackerDB.settings.theme = "modern"
+    end
 end
 
 -- Check and handle weekly reset across all characters
@@ -334,6 +342,21 @@ function WQT.RemoveQuest(index)
     if WQT.RefreshUI then WQT.RefreshUI() end
 end
 
+-- Restore default 6 Midnight quests
+function WQT.ResetToDefaultQuests()
+    WeeklyQuestTrackerDB.quests = {}
+    for _, q in ipairs(WQT.DEFAULT_QUESTS) do
+        table.insert(WeeklyQuestTrackerDB.quests, {
+            name = q.name,
+            ids = { unpack(q.ids or {}) },
+            isWeekly = q.isWeekly,
+        })
+    end
+    print(string.format("%s: Restored default 6 Midnight quests.", WQT.ADDON_TITLE))
+    WQT.ScanCurrentCharacter()
+    if WQT.RefreshUI then WQT.RefreshUI() end
+end
+
 -- Remove an unwanted character record
 function WQT.RemoveCharacter(charKey)
     if WeeklyQuestTrackerDB.characters[charKey] then
@@ -427,6 +450,13 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         WQT.InitDB()
         WQT.CheckWeeklyReset()
+        if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.autoOpenOnLogin then
+            C_Timer.After(1.2, function()
+                if WQT.ToggleUI and not (mainFrame and mainFrame:IsShown()) then
+                    WQT.ToggleUI()
+                end
+            end)
+        end
         C_Timer.After(1.5, function()
             WQT.ScanCurrentCharacter()
         end)

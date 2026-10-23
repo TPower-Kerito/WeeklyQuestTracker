@@ -38,12 +38,77 @@ local CARD_BACKDROP = {
     insets = { left = 2, right = 2, top = 2, bottom = 2 },
 }
 
--- Format Class Colored Name with Class Icon
+-- Modern vs Classic Theme Presets
+function WQT.GetTheme()
+    local themeKey = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.theme) or "modern"
+    if themeKey == "classic" then
+        return {
+            name = "classic",
+            frameBg = { 0.08, 0.09, 0.12, 0.96 },
+            frameBorder = { 0.35, 0.38, 0.45, 1 },
+            headerBg = { 0.12, 0.14, 0.18, 1 },
+            headerBorder = { 0.22, 0.25, 0.32, 1 },
+            cardBg = { 0.12, 0.14, 0.18, 0.9 },
+            cardBorder = { 0.25, 0.28, 0.36, 0.8 },
+            tabActiveBg = { 0.22, 0.26, 0.35, 1 },
+            tabActiveBorder = { 0.9, 0.75, 0.2, 1 },
+            tabActiveTextColor = "|cffffd100",
+            tabInactiveBg = { 0.12, 0.13, 0.17, 1 },
+            tabInactiveBorder = { 0.25, 0.28, 0.35, 0.6 },
+            tabInactiveTextColor = "|cffa0a0a0",
+        }
+    else
+        -- Modern Midnight Glow
+        return {
+            name = "modern",
+            frameBg = { 0.05, 0.06, 0.09, 0.97 },
+            frameBorder = { 0.14, 0.32, 0.52, 0.95 },
+            headerBg = { 0.08, 0.10, 0.15, 0.98 },
+            headerBorder = { 0.16, 0.28, 0.44, 0.9 },
+            cardBg = { 0.07, 0.09, 0.14, 0.94 },
+            cardBorder = { 0.16, 0.24, 0.36, 0.8 },
+            cardHoverBorder = { 0.0, 0.85, 1.0, 1.0 },
+            tabActiveBg = { 0.10, 0.22, 0.36, 1 },
+            tabActiveBorder = { 0.0, 0.85, 1.0, 1 },
+            tabActiveTextColor = "|cff00e5ff",
+            tabInactiveBg = { 0.08, 0.09, 0.13, 0.95 },
+            tabInactiveBorder = { 0.18, 0.22, 0.30, 0.75 },
+            tabInactiveTextColor = "|cff8c9bb0",
+        }
+    end
+end
+
+function WQT.ApplyTheme()
+    if not mainFrame then return end
+    local theme = WQT.GetTheme()
+    mainFrame:SetBackdropColor(unpack(theme.frameBg))
+    mainFrame:SetBackdropBorderColor(unpack(theme.frameBorder))
+    if mainFrame.header then
+        mainFrame.header:SetBackdropColor(unpack(theme.headerBg))
+        mainFrame.header:SetBackdropBorderColor(unpack(theme.headerBorder))
+    end
+end
+
+-- Format Class Colored Name with Class Icon (Honors showClassIcons setting)
 local function GetFormattedName(charData)
     local r, g, b, hex = WQT.GetClassColor(charData.class)
-    local icon = WQT.GetClassIcon(charData.class)
+    local showIcons = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.showClassIcons ~= false)
+    local icon = showIcons and WQT.GetClassIcon(charData.class) or ""
     local iconPrefix = (icon and icon ~= "") and (icon .. " ") or ""
     return string.format("%s|c%s%s|r", iconPrefix, hex, charData.name or "Unknown")
+end
+
+-- Update Minimap and Window Header Icon in Real-Time
+function WQT.UpdateAddonIcon(texturePath)
+    if not WeeklyQuestTrackerDB.settings then WeeklyQuestTrackerDB.settings = {} end
+    WeeklyQuestTrackerDB.settings.iconTexture = texturePath
+    local mb = _G["WQT_MinimapButton"]
+    if mb and mb.icon then
+        mb.icon:SetTexture(texturePath)
+    end
+    if mainFrame and mainFrame.titleIcon then
+        mainFrame.titleIcon:SetTexture(texturePath)
+    end
 end
 
 -- Resolve Full or Compact Status Display String
@@ -78,9 +143,10 @@ function WQT.CreateMainFrame()
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     f:SetClampedToScreen(true)
+    local theme = WQT.GetTheme()
     f:SetBackdrop(FRAME_BACKDROP)
-    f:SetBackdropColor(0.08, 0.09, 0.12, 0.96)
-    f:SetBackdropBorderColor(0.35, 0.38, 0.45, 1)
+    f:SetBackdropColor(unpack(theme.frameBg))
+    f:SetBackdropBorderColor(unpack(theme.frameBorder))
 
     -- Register ESC key to close
     tinsert(UISpecialFrames, "WQT_MainFrame")
@@ -91,25 +157,42 @@ function WQT.CreateMainFrame()
     header:SetPoint("TOPRIGHT", -4, -4)
     header:SetHeight(42)
     header:SetBackdrop(CARD_BACKDROP)
-    header:SetBackdropColor(0.12, 0.14, 0.18, 1)
-    header:SetBackdropBorderColor(0.22, 0.25, 0.32, 1)
+    header:SetBackdropColor(unpack(theme.headerBg))
+    header:SetBackdropBorderColor(unpack(theme.headerBorder))
+    f.header = header
+
+    -- Modern Title Icon Badge
+    local iconTexture = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.iconTexture) or "Interface\\Icons\\inv_misc_compass_01"
+    local titleIconBadge = CreateFrame("Frame", nil, header, "BackdropTemplate")
+    titleIconBadge:SetSize(28, 28)
+    titleIconBadge:SetPoint("LEFT", header, "LEFT", 10, 0)
+    titleIconBadge:SetBackdrop(CARD_BACKDROP)
+    titleIconBadge:SetBackdropColor(0.06, 0.08, 0.12, 1)
+    titleIconBadge:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.9)
+
+    local titleIcon = titleIconBadge:CreateTexture(nil, "ARTWORK")
+    titleIcon:SetSize(22, 22)
+    titleIcon:SetPoint("CENTER", 0, 0)
+    titleIcon:SetTexture(iconTexture)
+    f.titleIcon = titleIcon
+    f.titleIconBadge = titleIconBadge
 
     -- Title Text
     local title = header:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
-    title:SetPoint("LEFT", header, "LEFT", 14, 0)
+    title:SetPoint("LEFT", titleIconBadge, "RIGHT", 10, 0)
     title:SetText(WQT.ADDON_TITLE .. " |cff888888v" .. WQT.VERSION .. "|r")
 
     -- Reset Timer Badge
     local resetBadge = CreateFrame("Frame", nil, header, "BackdropTemplate")
     resetBadge:SetPoint("LEFT", title, "RIGHT", 14, 0)
-    resetBadge:SetSize(140, 24)
+    resetBadge:SetSize(145, 24)
     resetBadge:SetBackdrop(CARD_BACKDROP)
-    resetBadge:SetBackdropColor(0.18, 0.16, 0.10, 0.9)
-    resetBadge:SetBackdropBorderColor(0.6, 0.5, 0.2, 0.8)
+    resetBadge:SetBackdropColor(0.16, 0.14, 0.08, 0.9)
+    resetBadge:SetBackdropBorderColor(0.65, 0.55, 0.2, 0.85)
 
     local resetText = resetBadge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     resetText:SetPoint("CENTER", 0, 0)
-    resetText:SetText("|cffffcc00Reset in: ...|r")
+    resetText:SetText("|cffffcc00Reset: ...|r")
     f.resetText = resetText
 
     -- Close Button (Custom Flat Sleek)
@@ -119,28 +202,28 @@ function WQT.CreateMainFrame()
 
     -- "+ Add Quest" Button
     local addBtn = CreateFrame("Button", nil, header, "BackdropTemplate")
-    addBtn:SetSize(110, 24)
+    addBtn:SetSize(105, 24)
     addBtn:SetPoint("RIGHT", closeBtn, "LEFT", -8, 0)
     addBtn:SetBackdrop(CARD_BACKDROP)
-    addBtn:SetBackdropColor(0.15, 0.22, 0.32, 1)
-    addBtn:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.9)
+    addBtn:SetBackdropColor(0.12, 0.20, 0.32, 1)
+    addBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
 
     local addBtnText = addBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     addBtnText:SetPoint("CENTER", 0, 0)
-    addBtnText:SetText("|cff66ccff+ Add Quest|r")
+    addBtnText:SetText("|cff00e5ff+ Add Quest|r")
     addBtn:SetScript("OnEnter", function(self)
-        self:SetBackdropColor(0.2, 0.3, 0.45, 1)
-        self:SetBackdropBorderColor(0.4, 0.7, 1.0, 1)
+        self:SetBackdropColor(0.18, 0.28, 0.44, 1)
+        self:SetBackdropBorderColor(0.2, 0.95, 1.0, 1)
     end)
     addBtn:SetScript("OnLeave", function(self)
-        self:SetBackdropColor(0.15, 0.22, 0.32, 1)
-        self:SetBackdropBorderColor(0.3, 0.5, 0.7, 0.9)
+        self:SetBackdropColor(0.12, 0.20, 0.32, 1)
+        self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
     end)
     addBtn:SetScript("OnClick", function()
         WQT.ShowAddQuestDialog()
     end)
 
-    -- Tab Switcher Bar (4 Tabs)
+    -- Tab Switcher Bar (5 Tabs)
     local tabBar = CreateFrame("Frame", nil, f)
     tabBar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -6)
     tabBar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -6, -6)
@@ -152,12 +235,13 @@ function WQT.CreateMainFrame()
         { id = "grid", label = "Grid (All Alts)" },
         { id = "cards", label = "Cards" },
         { id = "todo", label = "To-Do List" },
+        { id = "settings", label = "Settings" },
     }
 
     local lastBtn = nil
     for _, t in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, tabBar, "BackdropTemplate")
-        btn:SetSize(130, 26)
+        btn:SetSize(114, 26)
         if not lastBtn then
             btn:SetPoint("LEFT", tabBar, "LEFT", 0, 0)
         else
@@ -165,15 +249,36 @@ function WQT.CreateMainFrame()
         end
 
         btn:SetBackdrop(CARD_BACKDROP)
-        btn:SetBackdropColor(0.14, 0.15, 0.19, 1)
-        btn:SetBackdropBorderColor(0.28, 0.30, 0.38, 0.8)
+        btn:SetBackdropColor(unpack(theme.tabInactiveBg))
+        btn:SetBackdropBorderColor(unpack(theme.tabInactiveBorder))
 
         local btnText = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         btnText:SetPoint("CENTER", 0, 0)
-        btnText:SetText(t.label)
+        btnText:SetText(theme.tabInactiveTextColor .. t.label .. "|r")
         btn.text = btnText
 
+        btn:SetScript("OnEnter", function(self)
+            if activeTab ~= t.id then
+                self:SetBackdropColor(0.14, 0.20, 0.30, 1)
+                self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.8)
+                local plain = self.text:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                self.text:SetText("|cffffffff" .. plain .. "|r")
+            end
+        end)
+        btn:SetScript("OnLeave", function(self)
+            if activeTab ~= t.id then
+                local curTheme = WQT.GetTheme()
+                self:SetBackdropColor(unpack(curTheme.tabInactiveBg))
+                self:SetBackdropBorderColor(unpack(curTheme.tabInactiveBorder))
+                local plain = self.text:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                self.text:SetText(curTheme.tabInactiveTextColor .. plain .. "|r")
+            end
+        end)
+
         btn:SetScript("OnClick", function()
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                PlaySound(SOUNDKIT.U_CHAT_SCROLL_BUTTON)
+            end
             WQT.SetViewMode(t.id)
         end)
 
@@ -185,7 +290,7 @@ function WQT.CreateMainFrame()
     -- Filter Bar (Right-aligned in tabBar for Grid, Cards, and To-Do)
     local filterBar = CreateFrame("Frame", nil, tabBar)
     filterBar:SetPoint("RIGHT", tabBar, "RIGHT", -2, 0)
-    filterBar:SetSize(430, 26)
+    filterBar:SetSize(400, 26)
     f.filterContainer = filterBar
 
     local fLabel = filterBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -194,7 +299,7 @@ function WQT.CreateMainFrame()
 
     -- 1. Status Filter Button
     local statusBtn = CreateFrame("Button", nil, filterBar, "BackdropTemplate")
-    statusBtn:SetSize(125, 24)
+    statusBtn:SetSize(115, 24)
     statusBtn:SetPoint("LEFT", fLabel, "RIGHT", 6, 0)
     statusBtn:SetBackdrop(CARD_BACKDROP)
     statusBtn:SetBackdropColor(0.14, 0.16, 0.22, 1)
@@ -209,7 +314,7 @@ function WQT.CreateMainFrame()
 
     -- 2. Quest Filter Button
     local questBtn = CreateFrame("Button", nil, filterBar, "BackdropTemplate")
-    questBtn:SetSize(160, 24)
+    questBtn:SetSize(155, 24)
     questBtn:SetPoint("LEFT", statusBtn, "RIGHT", 6, 0)
     questBtn:SetBackdrop(CARD_BACKDROP)
     questBtn:SetBackdropColor(0.14, 0.16, 0.22, 1)
@@ -298,17 +403,19 @@ function WQT.SetViewMode(mode)
         WeeklyQuestTrackerDB.settings.viewMode = activeTab
     end
 
+    local theme = WQT.GetTheme()
+
     if mainFrame and mainFrame.tabButtons then
         for tabId, btn in pairs(mainFrame.tabButtons) do
+            local plainText = btn.text:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
             if tabId == activeTab then
-                btn:SetBackdropColor(0.22, 0.26, 0.35, 1)
-                btn:SetBackdropBorderColor(0.9, 0.75, 0.2, 1)
-                btn.text:SetText("|cffffd100" .. btn.text:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") .. "|r")
+                btn:SetBackdropColor(unpack(theme.tabActiveBg))
+                btn:SetBackdropBorderColor(unpack(theme.tabActiveBorder))
+                btn.text:SetText(theme.tabActiveTextColor .. plainText .. "|r")
             else
-                btn:SetBackdropColor(0.12, 0.13, 0.17, 1)
-                btn:SetBackdropBorderColor(0.25, 0.28, 0.35, 0.6)
-                local plainText = btn.text:GetText():gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-                btn.text:SetText("|cffa0a0a0" .. plainText .. "|r")
+                btn:SetBackdropColor(unpack(theme.tabInactiveBg))
+                btn:SetBackdropBorderColor(unpack(theme.tabInactiveBorder))
+                btn.text:SetText(theme.tabInactiveTextColor .. plainText .. "|r")
             end
         end
     end
@@ -485,15 +592,17 @@ end
 function WQT.RefreshUI()
     if not mainFrame or not mainFrame:IsShown() then return end
 
+    WQT.ApplyTheme()
+
     local secsUntilReset = C_DateAndTime.GetSecondsUntilWeeklyReset() or 0
-    mainFrame.resetText:SetText(string.format("|cffffcc00Reset in: %s|r", WQT.FormatTimeRemaining(secsUntilReset)))
+    mainFrame.resetText:SetText(string.format("|cffffcc00Reset: %s|r", WQT.FormatTimeRemaining(secsUntilReset)))
 
     local currentKey = WQT.GetPlayerKey()
     mainFrame.currentAltText:SetText(string.format("Current Alt: |cffffd100%s|r", currentKey))
 
-    -- Show Filter Bar on Grid, Cards, and To-Do; hide on Current Alt
+    -- Show Filter Bar on Grid, Cards, and To-Do; hide on Current Alt and Settings
     if mainFrame.filterContainer then
-        if activeTab == "current" then
+        if activeTab == "current" or activeTab == "settings" then
             mainFrame.filterContainer:Hide()
         else
             mainFrame.filterContainer:Show()
@@ -563,6 +672,8 @@ function WQT.RefreshUI()
         WQT.RenderCardsView(sortedChars, quests, 0)
     elseif activeTab == "todo" then
         WQT.RenderTodoView(sortedChars, quests, 0)
+    elseif activeTab == "settings" then
+        WQT.RenderSettingsView(0)
     else
         activeTab = "current"
         WQT.RenderCurrentCharacterView(quests, 0)
@@ -1207,6 +1318,355 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
 end
 
 -- =========================================================================
+-- VIEW 4: SETTINGS & CUSTOMIZATION
+-- =========================================================================
+function WQT.RenderSettingsView(startY)
+    local parent = contentScrollChild
+    local currentY = startY or 0
+    local totalWidth = 980
+    local settings = WeeklyQuestTrackerDB.settings or {}
+    local currentIcon = settings.iconTexture or "Interface\\Icons\\inv_misc_compass_01"
+    local currentTheme = settings.theme or "modern"
+
+    -- 1. Hero Header Banner
+    local banner = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    banner:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    banner:SetSize(totalWidth, 54)
+    banner:SetBackdrop(CARD_BACKDROP)
+    banner:SetBackdropColor(0.08, 0.12, 0.18, 0.95)
+    banner:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+
+    local bTitle = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    bTitle:SetPoint("TOPLEFT", 16, -10)
+    bTitle:SetText("|cff00e5ffSettings & Customization|r")
+
+    local bSub = banner:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    bSub:SetPoint("TOPLEFT", 16, -32)
+    bSub:SetText("|cff8e9aafPersonalize your visual theme, choose your minimap icon, and configure display options.|r")
+
+    currentY = currentY - 64
+
+    -- 2. Section: UI Visual Theme (Modern vs Classic)
+    local themeBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    themeBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    themeBox:SetSize(totalWidth, 105)
+    themeBox:SetBackdrop(CARD_BACKDROP)
+    themeBox:SetBackdropColor(0.07, 0.08, 0.12, 0.95)
+    themeBox:SetBackdropBorderColor(0.20, 0.28, 0.40, 0.85)
+
+    local tTitle = themeBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    tTitle:SetPoint("TOPLEFT", 14, -12)
+    tTitle:SetText("|cffffd100Visual Theme Preset|r")
+
+    local tDesc = themeBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    tDesc:SetPoint("TOPLEFT", 14, -32)
+    tDesc:SetText("|cff888888Switch between the modern Midnight theme or restore the previous classic look at any time:|r")
+
+    -- Modern Theme Button
+    local modernBtn = CreateFrame("Button", nil, themeBox, "BackdropTemplate")
+    modernBtn:SetPoint("TOPLEFT", 14, -54)
+    modernBtn:SetSize(240, 38)
+    modernBtn:SetBackdrop(CARD_BACKDROP)
+    local isModern = (currentTheme == "modern")
+    if isModern then
+        modernBtn:SetBackdropColor(0.09, 0.18, 0.28, 1)
+        modernBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 1)
+    else
+        modernBtn:SetBackdropColor(0.08, 0.10, 0.14, 0.9)
+        modernBtn:SetBackdropBorderColor(0.2, 0.25, 0.35, 0.6)
+    end
+    local modernText = modernBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    modernText:SetPoint("CENTER", 0, 0)
+    modernText:SetText(isModern and "|cff00e5ff[Active] Modern Midnight (Glow)|r" or "|cffffffffModern Midnight (Glow)|r")
+    modernBtn:SetScript("OnClick", function()
+        settings.theme = "modern"
+        WQT.ApplyTheme()
+        if settings.soundFeedback ~= false then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+        WQT.RefreshUI()
+    end)
+
+    -- Classic Theme Button
+    local classicBtn = CreateFrame("Button", nil, themeBox, "BackdropTemplate")
+    classicBtn:SetPoint("LEFT", modernBtn, "RIGHT", 14, 0)
+    classicBtn:SetSize(240, 38)
+    classicBtn:SetBackdrop(CARD_BACKDROP)
+    local isClassic = (currentTheme == "classic")
+    if isClassic then
+        classicBtn:SetBackdropColor(0.16, 0.18, 0.24, 1)
+        classicBtn:SetBackdropBorderColor(0.9, 0.75, 0.2, 1)
+    else
+        classicBtn:SetBackdropColor(0.08, 0.10, 0.14, 0.9)
+        classicBtn:SetBackdropBorderColor(0.2, 0.25, 0.35, 0.6)
+    end
+    local classicText = classicBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    classicText:SetPoint("CENTER", 0, 0)
+    classicText:SetText(isClassic and "|cffffd100[Active] Classic Slate (Previous)|r" or "|cffffffffClassic Slate (Previous Look)|r")
+    classicBtn:SetScript("OnClick", function()
+        settings.theme = "classic"
+        WQT.ApplyTheme()
+        if settings.soundFeedback ~= false then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+        WQT.RefreshUI()
+    end)
+
+    currentY = currentY - 115
+
+    -- 3. Section: Minimap & Window Icon Style
+    local iconBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    iconBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    iconBox:SetSize(totalWidth, 140)
+    iconBox:SetBackdrop(CARD_BACKDROP)
+    iconBox:SetBackdropColor(0.07, 0.08, 0.12, 0.95)
+    iconBox:SetBackdropBorderColor(0.20, 0.28, 0.40, 0.85)
+
+    local iTitle = iconBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    iTitle:SetPoint("TOPLEFT", 14, -12)
+    iTitle:SetText("|cffffd100Minimap & Tracker Icon Style|r")
+
+    local iDesc = iconBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    iDesc:SetPoint("TOPLEFT", 14, -32)
+    iDesc:SetText("|cff888888Click any icon below to instantly change your Minimap button, Compartment, and Tracker header:|r")
+
+    local iconsList = WQT.AVAILABLE_ICONS or {}
+    local tileWidth = 152
+    local tileHeight = 68
+    local startX = 14
+    for idx, item in ipairs(iconsList) do
+        local isSelected = (currentIcon == item.texture)
+        local tile = CreateFrame("Button", nil, iconBox, "BackdropTemplate")
+        tile:SetPoint("TOPLEFT", iconBox, "TOPLEFT", startX + (idx - 1) * (tileWidth + 8), -56)
+        tile:SetSize(tileWidth, tileHeight)
+        tile:SetBackdrop(CARD_BACKDROP)
+
+        if isSelected then
+            tile:SetBackdropColor(0.10, 0.20, 0.30, 1)
+            tile:SetBackdropBorderColor(0.0, 0.85, 1.0, 1)
+        else
+            tile:SetBackdropColor(0.09, 0.10, 0.14, 0.9)
+            tile:SetBackdropBorderColor(0.22, 0.26, 0.35, 0.6)
+        end
+
+        local tex = tile:CreateTexture(nil, "ARTWORK")
+        tex:SetSize(28, 28)
+        tex:SetPoint("TOP", 0, -8)
+        tex:SetTexture(item.texture)
+
+        local nameStr = tile:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        nameStr:SetPoint("TOP", tex, "BOTTOM", 0, -4)
+        if isSelected then
+            nameStr:SetText("|cff00e5ff" .. item.name .. "|r")
+        else
+            nameStr:SetText("|cffffffff" .. item.name .. "|r")
+        end
+
+        tile:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(item.name, 1, 0.82, 0)
+            GameTooltip:AddLine(item.desc or "Click to set this icon.", 0.8, 0.8, 0.8, true)
+            if isSelected then
+                GameTooltip:AddLine("|cff2ecc71Currently Selected|r", 0.2, 1, 0.4)
+            end
+            GameTooltip:Show()
+            if not isSelected then
+                self:SetBackdropBorderColor(0.4, 0.65, 0.95, 0.9)
+            end
+        end)
+        tile:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+            if not isSelected then
+                self:SetBackdropBorderColor(0.22, 0.26, 0.35, 0.6)
+            end
+        end)
+        tile:SetScript("OnClick", function()
+            WQT.UpdateAddonIcon(item.texture)
+            if settings.soundFeedback ~= false then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+            WQT.RefreshUI()
+        end)
+    end
+
+    currentY = currentY - 150
+
+    -- 4. Section: Interface & Display Options (Checkboxes)
+    local optBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    optBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    optBox:SetSize(totalWidth, 125)
+    optBox:SetBackdrop(CARD_BACKDROP)
+    optBox:SetBackdropColor(0.07, 0.08, 0.12, 0.95)
+    optBox:SetBackdropBorderColor(0.20, 0.28, 0.40, 0.85)
+
+    local oTitle = optBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    oTitle:SetPoint("TOPLEFT", 14, -12)
+    oTitle:SetText("|cffffd100Display & Automation Options|r")
+
+    local function CreateCheckbox(parentFrame, x, y, label, settingKey, defaultVal, onChange)
+        local cb = CreateFrame("CheckButton", nil, parentFrame, "UICheckButtonTemplate")
+        cb:SetPoint("TOPLEFT", x, y)
+        cb:SetSize(24, 24)
+        local currentVal = (settings[settingKey] == nil and defaultVal) or settings[settingKey]
+        cb:SetChecked(currentVal)
+
+        local cbLabel = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cbLabel:SetPoint("LEFT", cb, "RIGHT", 6, 0)
+        cbLabel:SetText(label)
+
+        cb:SetScript("OnClick", function(self)
+            local isChecked = self:GetChecked()
+            settings[settingKey] = isChecked
+            if settings.soundFeedback ~= false then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON) end
+            if onChange then onChange(isChecked) end
+        end)
+        return cb
+    end
+
+    -- Checkbox 1: Minimap Button
+    CreateCheckbox(optBox, 14, -38, "Show Floating Minimap Icon", "showMinimapButton", true, function(val)
+        local mb = _G["WQT_MinimapButton"]
+        if mb then
+            if val then mb:Show() else mb:Hide() end
+        end
+    end)
+
+    -- Checkbox 2: Class Icons
+    CreateCheckbox(optBox, 330, -38, "Show Class Icons next to Names", "showClassIcons", true, function()
+        WQT.RefreshUI()
+    end)
+
+    -- Checkbox 3: Highlight Current Character
+    CreateCheckbox(optBox, 640, -38, "Highlight Current Alt in Grid View", "highlightCurrentChar", true, function()
+        WQT.RefreshUI()
+    end)
+
+    -- Checkbox 4: Sound Feedback
+    CreateCheckbox(optBox, 14, -76, "Play Sound Feedback on Clicks", "soundFeedback", true)
+
+    -- Checkbox 5: Auto Open on Login
+    CreateCheckbox(optBox, 330, -76, "Auto-open Tracker Window on Login", "autoOpenOnLogin", false)
+
+    currentY = currentY - 135
+
+    -- 5. Section: Database & Character Management
+    local dbBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    dbBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    dbBox:SetBackdrop(CARD_BACKDROP)
+    dbBox:SetBackdropColor(0.07, 0.08, 0.12, 0.95)
+    dbBox:SetBackdropBorderColor(0.20, 0.28, 0.40, 0.85)
+
+    local dTitle = dbBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    dTitle:SetPoint("TOPLEFT", 14, -12)
+    dTitle:SetText("|cffffd100Data & Character Management|r")
+
+    -- Button A: Re-scan Current Character
+    local scanBtn = CreateFrame("Button", nil, dbBox, "BackdropTemplate")
+    scanBtn:SetPoint("TOPLEFT", 14, -36)
+    scanBtn:SetSize(210, 26)
+    scanBtn:SetBackdrop(CARD_BACKDROP)
+    scanBtn:SetBackdropColor(0.12, 0.20, 0.32, 1)
+    scanBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.9)
+    local scanText = scanBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scanText:SetPoint("CENTER", 0, 0)
+    scanText:SetText("|cff00e5ffRe-Scan Current Alt Now|r")
+    scanBtn:SetScript("OnClick", function()
+        WQT.ScanCurrentCharacter()
+        print(string.format("%s: Current character re-scanned successfully.", WQT.ADDON_TITLE))
+        WQT.RefreshUI()
+    end)
+
+    -- Button B: Reset Default Quests
+    local resetQBtn = CreateFrame("Button", nil, dbBox, "BackdropTemplate")
+    resetQBtn:SetPoint("LEFT", scanBtn, "RIGHT", 14, 0)
+    resetQBtn:SetSize(220, 26)
+    resetQBtn:SetBackdrop(CARD_BACKDROP)
+    resetQBtn:SetBackdropColor(0.22, 0.14, 0.14, 1)
+    resetQBtn:SetBackdropBorderColor(0.7, 0.3, 0.3, 0.9)
+    local resetQText = resetQBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    resetQText:SetPoint("CENTER", 0, 0)
+    resetQText:SetText("|cffff6666Restore 6 Default Quests|r")
+    resetQBtn:SetScript("OnClick", function()
+        StaticPopupDialogs["WQT_CONFIRM_RESTORE_QUESTS"] = {
+            text = "Reset all tracked quests back to the 6 default Midnight quests?",
+            button1 = "Restore",
+            button2 = "Cancel",
+            OnAccept = function() WQT.ResetToDefaultQuests() end,
+            timeout = 0,
+            whileDead = true,
+            hideOnEscape = true,
+        }
+        StaticPopup_Show("WQT_CONFIRM_RESTORE_QUESTS")
+    end)
+
+    -- Tracked Alts Table
+    local charHeader = dbBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    charHeader:SetPoint("TOPLEFT", 14, -72)
+    charHeader:SetText("|cffaaaaaaTracked Alts in Database (Click 'Remove' to delete inactive alts):|r")
+
+    local charY = -94
+    local allChars = WeeklyQuestTrackerDB.characters or {}
+    local charList = {}
+    for k, v in pairs(allChars) do table.insert(charList, { key = k, data = v }) end
+    table.sort(charList, function(a, b) return (a.data.name or "") < (b.data.name or "") end)
+
+    local qList = WeeklyQuestTrackerDB.quests or {}
+    for _, item in ipairs(charList) do
+        local cKey = item.key
+        local cData = item.data
+        local cRow = CreateFrame("Frame", nil, dbBox, "BackdropTemplate")
+        cRow:SetPoint("TOPLEFT", 14, charY)
+        cRow:SetSize(totalWidth - 28, 28)
+        cRow:SetBackdrop(CARD_BACKDROP)
+        cRow:SetBackdropColor(0.09, 0.10, 0.14, 0.8)
+        cRow:SetBackdropBorderColor(0.18, 0.22, 0.30, 0.6)
+
+        local cName = cRow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        cName:SetPoint("LEFT", 10, 0)
+        cName:SetText(GetFormattedName(cData) .. string.format(" |cff888888(%s)|r", cData.realm or ""))
+
+        local cQuests = cData.quests or {}
+        local done = 0
+        for _, q in ipairs(qList) do
+            local qs = cQuests[q.name]
+            if qs and (qs.state == "DONE" or qs.completed) then done = done + 1 end
+        end
+
+        local cCount = cRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        cCount:SetPoint("RIGHT", -80, 0)
+        cCount:SetText(string.format("|cffffcc00%d / %d Done|r", done, #qList))
+
+        local delBtn = CreateFrame("Button", nil, cRow, "BackdropTemplate")
+        delBtn:SetSize(64, 20)
+        delBtn:SetPoint("RIGHT", -8, 0)
+        delBtn:SetBackdrop(CARD_BACKDROP)
+        delBtn:SetBackdropColor(0.24, 0.10, 0.12, 1)
+        delBtn:SetBackdropBorderColor(0.65, 0.25, 0.25, 0.9)
+        local delText = delBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        delText:SetPoint("CENTER", 0, 0)
+        delText:SetText("|cffff5555Remove|r")
+
+        delBtn:SetScript("OnClick", function()
+            StaticPopupDialogs["WQT_CONFIRM_REMOVE_CHAR_SETTINGS"] = {
+                text = "Remove alt |cffffd100" .. (cData.name or cKey) .. "|r from database?",
+                button1 = "Remove",
+                button2 = "Cancel",
+                OnAccept = function()
+                    WQT.RemoveCharacter(cKey)
+                end,
+                timeout = 0,
+                whileDead = true,
+                hideOnEscape = true,
+            }
+            StaticPopup_Show("WQT_CONFIRM_REMOVE_CHAR_SETTINGS")
+        end)
+
+        charY = charY - 32
+    end
+
+    local dbBoxHeight = math.abs(charY) + 14
+    dbBox:SetSize(totalWidth, dbBoxHeight)
+
+    currentY = currentY - (dbBoxHeight + 20)
+    parent:SetHeight(math.abs(currentY) + 60)
+    return currentY
+end
+
+-- =========================================================================
 -- DIALOG: ADD NEW QUEST DYNAMICALLY
 -- =========================================================================
 function WQT.ShowAddQuestDialog()
@@ -1359,14 +1819,20 @@ function WQT.CreateMinimapButton()
     btn:SetFrameLevel(500)
 
     local icon = btn:CreateTexture(nil, "BACKGROUND")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Book_09")
+    local savedIcon = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.iconTexture) or "Interface\\Icons\\inv_misc_compass_01"
+    icon:SetTexture(savedIcon)
     icon:SetSize(21, 21)
     icon:SetPoint("CENTER")
+    btn.icon = icon
 
     local border = btn:CreateTexture(nil, "OVERLAY")
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
     border:SetSize(54, 54)
     border:SetPoint("TOPLEFT")
+
+    if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.showMinimapButton == false then
+        btn:Hide()
+    end
 
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     btn:RegisterForDrag("LeftButton")
