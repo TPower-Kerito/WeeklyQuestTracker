@@ -1500,7 +1500,7 @@ function WQT.RenderSettingsView(startY)
     -- 4. Section: Interface & Display Options (Checkboxes)
     local optBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     optBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
-    optBox:SetSize(totalWidth, 125)
+    optBox:SetSize(totalWidth, 160)
     optBox:SetBackdrop(CARD_BACKDROP)
     optBox:SetBackdropColor(0.07, 0.08, 0.12, 0.95)
     optBox:SetBackdropBorderColor(0.20, 0.28, 0.40, 0.85)
@@ -1564,7 +1564,10 @@ function WQT.RenderSettingsView(startY)
         end
     end)
 
-    currentY = currentY - 135
+    -- Checkbox 7: Alt Incomplete Reminder on Logout (Feature 3)
+    CreateCheckbox(optBox, 14, -114, "Alt Incomplete Reminder on Logout", "logoutReminder", true)
+
+    currentY = currentY - 175
 
     -- 5. Section: Database & Character Management
     local dbBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
@@ -2156,6 +2159,175 @@ function WQT.ToggleMiniHUD()
         WQT.UpdateMiniHUD()
         print(string.format("%s: Mini HUD |cff00ff00shown|r.", WQT.ADDON_TITLE))
     end
+end
+
+-- =========================================================================
+-- FEATURE 3: LOGOUT REMINDER TOAST BANNER
+-- =========================================================================
+local logoutToast = nil
+local logoutToastTimer = nil
+
+function WQT.ShowLogoutReminderToast(currentCharInfo, currentCharPending, pendingAlts, totalQuests)
+    if not logoutToast then
+        logoutToast = CreateFrame("Frame", "WQT_LogoutReminderToast", UIParent, "BackdropTemplate")
+        logoutToast:SetSize(460, 150)
+        logoutToast:SetFrameStrata("DIALOG")
+        logoutToast:SetClampedToScreen(true)
+        logoutToast:SetMovable(true)
+        logoutToast:EnableMouse(true)
+        logoutToast:RegisterForDrag("LeftButton")
+        logoutToast:SetScript("OnDragStart", logoutToast.StartMoving)
+        logoutToast:SetScript("OnDragStop", function(self)
+            self:StopMovingOrSizing()
+            local point, _, relPoint, x, y = self:GetPoint()
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings then
+                WeeklyQuestTrackerDB.settings.logoutToastPosition = {
+                    point = point,
+                    relPoint = relPoint,
+                    x = math.floor(x + 0.5),
+                    y = math.floor(y + 0.5),
+                }
+            end
+        end)
+
+        logoutToast:SetBackdrop(CARD_BACKDROP)
+        logoutToast:SetBackdropColor(0.06, 0.08, 0.12, 0.98)
+        logoutToast:SetBackdropBorderColor(1.0, 0.82, 0.15, 0.95)
+
+        -- Position
+        local pos = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.logoutToastPosition
+        if pos and pos.point and pos.x and pos.y then
+            logoutToast:SetPoint(pos.point, UIParent, pos.relPoint or pos.point, pos.x, pos.y)
+        else
+            logoutToast:SetPoint("TOP", UIParent, "TOP", 0, -110)
+        end
+
+        -- Header Icon (Bell)
+        local icon = logoutToast:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(22, 22)
+        icon:SetPoint("TOPLEFT", 12, -10)
+        icon:SetTexture("Interface\\Icons\\inv_misc_bell_01")
+        icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        -- Title
+        local title = logoutToast:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+        title:SetPoint("LEFT", icon, "RIGHT", 8, 0)
+        title:SetText("|cffffd100Weekly Quest Alert|r  |cffff5555Pending Quests!|r")
+
+        -- Close Button (X)
+        local closeBtn = CreateFrame("Button", nil, logoutToast, "UIPanelCloseButton")
+        closeBtn:SetSize(24, 24)
+        closeBtn:SetPoint("TOPRIGHT", -4, -4)
+        closeBtn:SetScript("OnClick", function()
+            logoutToast:Hide()
+        end)
+
+        -- Divider line
+        local sep = logoutToast:CreateTexture(nil, "ARTWORK")
+        sep:SetHeight(1)
+        sep:SetPoint("TOPLEFT", 12, -36)
+        sep:SetPoint("TOPRIGHT", -12, -36)
+        sep:SetColorTexture(0.25, 0.35, 0.48, 0.6)
+
+        -- Content Line 1: Current character
+        local currText = logoutToast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        currText:SetPoint("TOPLEFT", 14, -44)
+        currText:SetJustifyH("LEFT")
+        logoutToast.currText = currText
+
+        -- Content Line 2: Other alts
+        local altsText = logoutToast:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        altsText:SetPoint("TOPLEFT", 14, -68)
+        altsText:SetPoint("RIGHT", logoutToast, "RIGHT", -14, 0)
+        altsText:SetJustifyH("LEFT")
+        altsText:SetWordWrap(true)
+        logoutToast.altsText = altsText
+
+        -- Open Tracker Button
+        local openBtn = CreateFrame("Button", nil, logoutToast, "BackdropTemplate")
+        openBtn:SetSize(160, 24)
+        openBtn:SetPoint("BOTTOMLEFT", 14, 12)
+        openBtn:SetBackdrop(CARD_BACKDROP)
+        openBtn:SetBackdropColor(0.10, 0.22, 0.35, 1)
+        openBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.9)
+        local openBtnText = openBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        openBtnText:SetPoint("CENTER", 0, 0)
+        openBtnText:SetText("|cff00e5ffOpen Quest Tracker|r")
+        openBtn:SetScript("OnClick", function()
+            logoutToast:Hide()
+            if not (mainFrame and mainFrame:IsShown()) then
+                WQT.ToggleUI()
+            end
+        end)
+        openBtn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(0.15, 0.30, 0.48, 1)
+        end)
+        openBtn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(0.10, 0.22, 0.35, 1)
+        end)
+
+        -- Dismiss Button
+        local dismissBtn = CreateFrame("Button", nil, logoutToast, "BackdropTemplate")
+        dismissBtn:SetSize(80, 24)
+        dismissBtn:SetPoint("BOTTOMRIGHT", -14, 12)
+        dismissBtn:SetBackdrop(CARD_BACKDROP)
+        dismissBtn:SetBackdropColor(0.14, 0.16, 0.22, 1)
+        dismissBtn:SetBackdropBorderColor(0.35, 0.40, 0.50, 0.8)
+        local dismissBtnText = dismissBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        dismissBtnText:SetPoint("CENTER", 0, 0)
+        dismissBtnText:SetText("|cffaaaaaaDismiss|r")
+        dismissBtn:SetScript("OnClick", function()
+            logoutToast:Hide()
+        end)
+        dismissBtn:SetScript("OnEnter", function(self)
+            self:SetBackdropColor(0.20, 0.22, 0.30, 1)
+        end)
+        dismissBtn:SetScript("OnLeave", function(self)
+            self:SetBackdropColor(0.14, 0.16, 0.22, 1)
+        end)
+    end
+
+    -- Update Dynamic Text
+    local cName = currentCharInfo and currentCharInfo.name or "Current Alt"
+    local cHex = currentCharInfo and currentCharInfo.classHex or "ffffffff"
+    if currentCharPending > 0 then
+        logoutToast.currText:SetText(string.format("• |cffffd100Current Alt|r (|c%s%s|r): |cffe74c3c%d of %d quests incomplete!|r",
+            cHex, cName, currentCharPending, totalQuests))
+    else
+        logoutToast.currText:SetText(string.format("• |cffffd100Current Alt|r (|c%s%s|r): |cff2ecc71All %d quests completed!|r",
+            cHex, cName, totalQuests))
+    end
+
+    if #pendingAlts > 0 then
+        local altStrs = {}
+        local maxDisplay = 4
+        for i = 1, math.min(#pendingAlts, maxDisplay) do
+            local a = pendingAlts[i]
+            table.insert(altStrs, string.format("|c%s%s|r (|cffe74c3c%d|r)", a.classHex, a.name, a.pending))
+        end
+        local listStr = table.concat(altStrs, ", ")
+        if #pendingAlts > maxDisplay then
+            listStr = listStr .. string.format(" |cff888888(+%d more)|r", #pendingAlts - maxDisplay)
+        end
+        logoutToast.altsText:SetText(string.format("• |cffffd100Other Incomplete Alts (%d):|r %s", #pendingAlts, listStr))
+        logoutToast:SetHeight(152)
+    else
+        logoutToast.altsText:SetText("• |cffffd100Other Alts:|r |cff2ecc71All other tracked alts are 100% complete!|r")
+        logoutToast:SetHeight(140)
+    end
+
+    -- Cancel existing auto-hide timer and set 10-second timer
+    if logoutToastTimer then
+        pcall(function() logoutToastTimer:Cancel() end)
+        logoutToastTimer = nil
+    end
+    logoutToastTimer = C_Timer.NewTimer(10, function()
+        if logoutToast and logoutToast:IsShown() then
+            logoutToast:Hide()
+        end
+    end)
+
+    logoutToast:Show()
 end
 
 -- =========================================================================

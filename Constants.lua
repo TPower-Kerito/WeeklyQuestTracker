@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.1.4"
+WQT.VERSION = "1.1.5"
 WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
 
 -- Available Minimap / Header Icons for User Selection
@@ -72,6 +72,7 @@ WQT.DEFAULT_CONFIG = {
     showMinimapButton = true,
     minimapAngle = 45,
     showMiniHUD = true, -- Feature 2: Compact On-Screen Floating Tracker Bar
+    logoutReminder = true, -- Feature 3: Alt Incomplete Reminder on Logout
     showClassIcons = true,
     highlightCurrentChar = true,
     autoOpenOnLogin = false,

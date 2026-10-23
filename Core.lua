@@ -14,6 +14,7 @@ f:RegisterEvent("QUEST_REMOVED")
 f:RegisterEvent("QUEST_ACCEPTED")
 f:RegisterEvent("QUEST_LOG_UPDATE")
 f:RegisterEvent("QUEST_WATCH_UPDATE")
+f:RegisterEvent("PLAYER_CAMPING")
 
 -- Helper: Get current character key (e.g. "Thrall-TwistingNether")
 function WQT.GetPlayerKey()
@@ -413,6 +414,118 @@ function WQT.CheckQuests(searchFilter)
     end)
 end
 
+-- =========================================================================
+-- FEATURE 3: ALT INCOMPLETE REMINDER ON LOGOUT
+-- =========================================================================
+local lastReminderTime = 0
+
+function WQT.CheckAndShowLogoutReminder(isManualTest)
+    if not isManualTest then
+        local enabled = (WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.logoutReminder ~= false)
+        if not enabled then return end
+
+        local now = time()
+        if (now - lastReminderTime) < 20 then return end
+        lastReminderTime = now
+    end
+
+    local quests = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.quests or {}
+    local totalQuests = #quests
+    if totalQuests == 0 then return end
+
+    local currentKey = WQT.GetPlayerKey()
+    local allChars = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.characters or {}
+
+    -- 1. Check Current Character
+    local currentCharData = allChars[currentKey]
+    local currentCharPending = 0
+    if currentCharData and currentCharData.quests then
+        for _, q in ipairs(quests) do
+            local qs = currentCharData.quests[q.name]
+            if not qs or (qs.state ~= "DONE" and not qs.completed) then
+                currentCharPending = currentCharPending + 1
+            end
+        end
+    end
+
+    -- 2. Check Other Alts
+    local pendingAlts = {}
+    for cKey, cData in pairs(allChars) do
+        if cKey ~= currentKey then
+            local pCount = 0
+            local cQuests = cData.quests or {}
+            for _, q in ipairs(quests) do
+                local qs = cQuests[q.name]
+                if not qs or (qs.state ~= "DONE" and not qs.completed) then
+                    pCount = pCount + 1
+                end
+            end
+            if pCount > 0 then
+                local _, _, _, hex = WQT.GetClassColor(cData.class)
+                table.insert(pendingAlts, {
+                    name = cData.name or cKey,
+                    classHex = hex or "ffffffff",
+                    pending = pCount,
+                })
+            end
+        end
+    end
+
+    -- If no characters have pending quests
+    if currentCharPending == 0 and #pendingAlts == 0 then
+        if isManualTest then
+            print(string.format("%s: |cff2ecc71All weekly quests are 100%% complete across all characters!|r", WQT.ADDON_TITLE))
+        end
+        return
+    end
+
+    -- Show On-Screen Reminder Toast Banner
+    local charName = (currentCharData and currentCharData.name) or UnitName("player") or "You"
+    local _, classFile = UnitClass("player")
+    local _, _, _, charHex = WQT.GetClassColor(currentCharData and currentCharData.class or classFile)
+    local currentCharInfo = {
+        name = charName,
+        classHex = charHex or "ffffffff",
+    }
+
+    if WQT.ShowLogoutReminderToast then
+        WQT.ShowLogoutReminderToast(currentCharInfo, currentCharPending, pendingAlts, totalQuests)
+    end
+
+    -- Print Clean Summary to Chat
+    print(string.format("%s: |cffffcc00=== Logout Reminder: Pending Weekly Tasks ===|r", WQT.ADDON_TITLE))
+    if currentCharPending > 0 then
+        print(string.format("  • |cffffd100Current Alt|r (|c%s%s|r): |cffe74c3c%d / %d quests incomplete!|r",
+            charHex or "ffffffff", charName, currentCharPending, totalQuests))
+    else
+        print(string.format("  • |cffffd100Current Alt|r (|c%s%s|r): |cff2ecc71All %d quests completed!|r",
+            charHex or "ffffffff", charName, totalQuests))
+    end
+
+    if #pendingAlts > 0 then
+        local altStrs = {}
+        for _, a in ipairs(pendingAlts) do
+            table.insert(altStrs, string.format("|c%s%s|r (|cffe74c3c%d|r)", a.classHex, a.name, a.pending))
+        end
+        print(string.format("  • |cffffd100Other Incomplete Alts (%d):|r %s", #pendingAlts, table.concat(altStrs, ", ")))
+    end
+
+    -- Play warning alert sound
+    pcall(function()
+        PlaySound(SOUNDKIT.READY_CHECK or SOUNDKIT.RAID_WARNING)
+    end)
+end
+
+-- Secure hook for Logout and Quit
+pcall(function()
+    hooksecurefunc("Logout", function()
+        WQT.CheckAndShowLogoutReminder(false)
+    end)
+    hooksecurefunc("Quit", function()
+        WQT.CheckAndShowLogoutReminder(false)
+    end)
+end)
+
 -- Slash Commands Handler
 SLASH_WEEKLYQUESTTRACKER1 = "/wqt"
 SLASH_WEEKLYQUESTTRACKER2 = "/weeklyquesttracker"
@@ -432,6 +545,8 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         WQT.CheckWeeklyReset()
     elseif cmd == "hud" or cmd == "bar" then
         if WQT.ToggleMiniHUD then WQT.ToggleMiniHUD() end
+    elseif cmd == "reminder" or cmd == "testlogout" then
+        WQT.CheckAndShowLogoutReminder(true)
     elseif cmd == "add" and arg1 then
         local qid = tonumber(arg1)
         local qname = arg2 and msg:match("add%s+%d+%s+(.+)")
@@ -444,6 +559,7 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         print(string.format("%s Commands:", WQT.ADDON_TITLE))
         print("  |cff00ff00/wqt|r - Toggle tracker window")
         print("  |cff00ff00/wqt hud|r - Toggle Mini HUD floating bar on screen")
+        print("  |cff00ff00/wqt reminder|r - Test logout reminder alert")
         print("  |cff00ff00/wqt scan|r - Re-scan current character")
         print("  |cff00ff00/wqt check [name]|r - Inspect quests and IDs in your log")
         print("  |cff00ff00/wqt add <QuestID> [Name]|r - Add a new quest")
@@ -468,6 +584,8 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
         C_Timer.After(1.5, function()
             WQT.ScanCurrentCharacter()
         end)
+    elseif event == "PLAYER_CAMPING" then
+        WQT.CheckAndShowLogoutReminder(false)
     elseif event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" or event == "QUEST_ACCEPTED" or event == "QUEST_LOG_UPDATE" or event == "QUEST_WATCH_UPDATE" then
         C_Timer.After(0.5, function()
             WQT.ScanCurrentCharacter()
