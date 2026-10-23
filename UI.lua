@@ -666,7 +666,22 @@ function WQT.RefreshUI()
             table.insert(sortedChars, { key = charKey, data = data })
         end
     end
-    table.sort(sortedChars, function(a, b) return (a.data.name or "") < (b.data.name or "") end)
+    local currentKey = WQT.GetPlayerKey()
+    table.sort(sortedChars, function(a, b)
+        local aIsCurrent = (a.key == currentKey)
+        local bIsCurrent = (b.key == currentKey)
+        if aIsCurrent ~= bIsCurrent then
+            return aIsCurrent
+        end
+
+        local aFav = a.data.favorite and true or false
+        local bFav = b.data.favorite and true or false
+        if aFav ~= bFav then
+            return aFav
+        end
+
+        return (a.data.name or "") < (b.data.name or "")
+    end)
 
     if activeTab == "current" then
         WQT.RenderCurrentCharacterView(quests, 0)
@@ -734,9 +749,38 @@ function WQT.RenderCurrentCharacterView(quests, startY)
     heroCard:SetBackdropColor(0.12, 0.14, 0.20, 0.98)
     heroCard:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
 
-    -- Character Name & Details
+    -- Character Name & Details (with Star Button)
+    local isFav = charData and charData.favorite
+    local favBtn = CreateFrame("Button", nil, heroCard)
+    favBtn:SetSize(22, 22)
+    favBtn:SetPoint("TOPLEFT", 14, -13)
+    local favText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    favText:SetPoint("CENTER", 0, 0)
+    favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+
+    favBtn:SetScript("OnClick", function()
+        if charData then
+            charData.favorite = not charData.favorite
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            end
+            WQT.RefreshUI()
+        end
+    end)
+    favBtn:SetScript("OnEnter", function(self)
+        favText:SetText("|cffffd100★|r")
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine(isFav and "Favorite Alt (Pinned)" or "Mark as Favorite / Main", 1, 0.82, 0)
+        GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    favBtn:SetScript("OnLeave", function(self)
+        favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+        GameTooltip:Hide()
+    end)
+
     local heroName = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    heroName:SetPoint("TOPLEFT", 16, -14)
+    heroName:SetPoint("LEFT", favBtn, "RIGHT", 4, 0)
     heroName:SetText(string.format("|c%s%s|r |cff00e5ff(Current Alt)|r", classColorHex, name))
 
     local heroDetails = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1075,9 +1119,37 @@ function WQT.RenderGridView(sortedChars, quests, startY)
             row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
         end
 
+        -- Star Button for Favorite in Grid
+        local isFav = charData and charData.favorite
+        local starBtn = CreateFrame("Button", nil, row)
+        starBtn:SetSize(18, 18)
+        starBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
+        local starText = starBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        starText:SetPoint("CENTER", 0, 0)
+        starText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+
+        starBtn:SetScript("OnClick", function()
+            charData.favorite = not charData.favorite
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            end
+            WQT.RefreshUI()
+        end)
+        starBtn:SetScript("OnEnter", function(self)
+            starText:SetText("|cffffd100★|r")
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(isFav and "Favorite Alt (Pinned to top)" or "Mark as Favorite / Main", 1, 0.82, 0)
+            GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
+            GameTooltip:Show()
+        end)
+        starBtn:SetScript("OnLeave", function(self)
+            starText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+            GameTooltip:Hide()
+        end)
+
         local charBtn = CreateFrame("Button", nil, row)
-        charBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
-        charBtn:SetSize(colCharWidth - 8, rowHeight)
+        charBtn:SetPoint("LEFT", starBtn, "RIGHT", 2, 0)
+        charBtn:SetSize(colCharWidth - 24, rowHeight)
 
         local v = (charData and charData.vault) or {}
         local vRaid = tonumber(v.raid) or 0
@@ -1086,7 +1158,7 @@ function WQT.RenderGridView(sortedChars, quests, startY)
         local vTotal = tonumber(v.total) or (vRaid + vMythic + vWorld)
 
         local charLabel = charBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        charLabel:SetPoint("LEFT", 4, 0)
+        charLabel:SetPoint("LEFT", 2, 0)
         local charPrefix = isCurrentChar and "|cff00e5ff[You] |r" or ""
         local charSuffix = isCurrentChar and " |cff00e5ff(You)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
         if vTotal > 0 then
@@ -1232,8 +1304,36 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
             card:SetPoint("TOPLEFT", parent, "TOPLEFT", 496, currentY)
         end
 
+        -- Star Button for Favorite in Card
+        local isFav = charData and charData.favorite
+        local favBtn = CreateFrame("Button", nil, card)
+        favBtn:SetSize(18, 18)
+        favBtn:SetPoint("TOPLEFT", 10, -9)
+        local favText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+        favText:SetPoint("CENTER", 0, 0)
+        favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+
+        favBtn:SetScript("OnClick", function()
+            charData.favorite = not charData.favorite
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            end
+            WQT.RefreshUI()
+        end)
+        favBtn:SetScript("OnEnter", function(self)
+            favText:SetText("|cffffd100★|r")
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:AddLine(isFav and "Favorite Alt (Pinned to top)" or "Mark as Favorite / Main", 1, 0.82, 0)
+            GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
+            GameTooltip:Show()
+        end)
+        favBtn:SetScript("OnLeave", function(self)
+            favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
+            GameTooltip:Hide()
+        end)
+
         local cardTitle = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
-        cardTitle:SetPoint("TOPLEFT", 12, -10)
+        cardTitle:SetPoint("LEFT", favBtn, "RIGHT", 4, 0)
         local tag = isCurrentChar and " |cff00e5ff(Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
         cardTitle:SetText(GetFormattedName(charData) .. tag)
 
@@ -1413,8 +1513,9 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
 
             local charName = itemBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
             charName:SetPoint("TOPLEFT", 12, -8)
+            local favPrefix = charData.favorite and "|cffffd100★ |r" or ""
             local tag = isCurrentChar and " |cff00e5ff(Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
-            charName:SetText(GetFormattedName(charData) .. tag)
+            charName:SetText(favPrefix .. GetFormattedName(charData) .. tag)
 
             local countBadge = itemBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             countBadge:SetPoint("TOPRIGHT", -14, -8)
@@ -1783,22 +1884,44 @@ function WQT.RenderSettingsView(startY)
     local allChars = WeeklyQuestTrackerDB.characters or {}
     local charList = {}
     for k, v in pairs(allChars) do table.insert(charList, { key = k, data = v }) end
-    table.sort(charList, function(a, b) return (a.data.name or "") < (b.data.name or "") end)
+    local curPlayerKey = WQT.GetPlayerKey()
+    table.sort(charList, function(a, b)
+        local aIsCurrent = (a.key == curPlayerKey)
+        local bIsCurrent = (b.key == curPlayerKey)
+        if aIsCurrent ~= bIsCurrent then return aIsCurrent end
+
+        local aFav = a.data.favorite and true or false
+        local bFav = b.data.favorite and true or false
+        if aFav ~= bFav then return aFav end
+
+        return (a.data.name or "") < (b.data.name or "")
+    end)
 
     local qList = WeeklyQuestTrackerDB.quests or {}
     for _, item in ipairs(charList) do
         local cKey = item.key
         local cData = item.data
+        local isCurrent = (cKey == curPlayerKey)
+        local isFav = cData.favorite and true or false
+
         local cRow = CreateFrame("Frame", nil, dbBox, "BackdropTemplate")
         cRow:SetPoint("TOPLEFT", 14, charY)
         cRow:SetSize(totalWidth - 28, 28)
         cRow:SetBackdrop(CARD_BACKDROP)
-        cRow:SetBackdropColor(0.09, 0.10, 0.14, 0.8)
-        cRow:SetBackdropBorderColor(0.18, 0.22, 0.30, 0.6)
+
+        if isCurrent then
+            cRow:SetBackdropColor(0.12, 0.16, 0.24, 0.9)
+            cRow:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.85)
+        else
+            cRow:SetBackdropColor(0.09, 0.10, 0.14, 0.8)
+            cRow:SetBackdropBorderColor(0.18, 0.22, 0.30, 0.6)
+        end
 
         local cName = cRow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         cName:SetPoint("LEFT", 10, 0)
-        cName:SetText(GetFormattedName(cData) .. string.format(" |cff888888(%s)|r", cData.realm or ""))
+        local starPrefix = isFav and "|cffffd100★ |r" or ""
+        local tag = isCurrent and " |cff00e5ff(Current Alt)|r" or string.format(" |cff888888(%s)|r", cData.realm or "")
+        cName:SetText(starPrefix .. GetFormattedName(cData) .. tag)
 
         local cQuests = cData.quests or {}
         local done = 0
@@ -1806,10 +1929,6 @@ function WQT.RenderSettingsView(startY)
             local qs = cQuests[q.name]
             if qs and (qs.state == "DONE" or qs.completed) then done = done + 1 end
         end
-
-        local cCount = cRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        cCount:SetPoint("RIGHT", -80, 0)
-        cCount:SetText(string.format("|cffffcc00%d / %d Done|r", done, #qList))
 
         local delBtn = CreateFrame("Button", nil, cRow, "BackdropTemplate")
         delBtn:SetSize(64, 20)
@@ -1820,6 +1939,33 @@ function WQT.RenderSettingsView(startY)
         local delText = delBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         delText:SetPoint("CENTER", 0, 0)
         delText:SetText("|cffff5555Remove|r")
+
+        -- Favorite Button in Settings
+        local favBtn = CreateFrame("Button", nil, cRow, "BackdropTemplate")
+        favBtn:SetSize(90, 20)
+        favBtn:SetPoint("RIGHT", delBtn, "LEFT", -8, 0)
+        favBtn:SetBackdrop(CARD_BACKDROP)
+        if isFav then
+            favBtn:SetBackdropColor(0.24, 0.20, 0.08, 1)
+            favBtn:SetBackdropBorderColor(1.0, 0.85, 0.20, 0.9)
+        else
+            favBtn:SetBackdropColor(0.11, 0.13, 0.18, 1)
+            favBtn:SetBackdropBorderColor(0.30, 0.35, 0.45, 0.7)
+        end
+        local favBtnText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        favBtnText:SetPoint("CENTER", 0, 0)
+        favBtnText:SetText(isFav and "|cffffd100★ Favorited|r" or "|cff888888☆ Favorite|r")
+        favBtn:SetScript("OnClick", function()
+            cData.favorite = not cData.favorite
+            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+            end
+            WQT.RefreshUI()
+        end)
+
+        local cCount = cRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        cCount:SetPoint("RIGHT", favBtn, "LEFT", -14, 0)
+        cCount:SetText(string.format("|cffffcc00%d / %d Done|r", done, #qList))
 
         delBtn:SetScript("OnClick", function()
             StaticPopupDialogs["WQT_CONFIRM_REMOVE_CHAR_SETTINGS"] = {
@@ -2472,7 +2618,8 @@ function WQT.ShowLogoutReminderToast(currentCharInfo, currentCharPending, pendin
         local maxDisplay = 4
         for i = 1, math.min(#pendingAlts, maxDisplay) do
             local a = pendingAlts[i]
-            table.insert(altStrs, string.format("|c%s%s|r (|cffe74c3c%d|r)", a.classHex, a.name, a.pending))
+            local star = a.favorite and "|cffffd100★|r" or ""
+            table.insert(altStrs, string.format("%s|c%s%s|r (|cffe74c3c%d|r)", star, a.classHex, a.name, a.pending))
         end
         local listStr = table.concat(altStrs, ", ")
         if #pendingAlts > maxDisplay then

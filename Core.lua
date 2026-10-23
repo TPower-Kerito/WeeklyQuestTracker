@@ -294,8 +294,14 @@ function WQT.PrintVaultSummary()
         table.insert(sorted, { key = k, data = v })
     end
     table.sort(sorted, function(a, b)
-        if a.key == currentKey then return true end
-        if b.key == currentKey then return false end
+        local aIsCurrent = (a.key == currentKey)
+        local bIsCurrent = (b.key == currentKey)
+        if aIsCurrent ~= bIsCurrent then return aIsCurrent end
+
+        local aFav = a.data.favorite and true or false
+        local bFav = b.data.favorite and true or false
+        if aFav ~= bFav then return aFav end
+
         return (a.data.name or "") < (b.data.name or "")
     end)
 
@@ -313,8 +319,9 @@ function WQT.PrintVaultSummary()
         local vTotal = tonumber(v.total) or (vRaid + vMythic + vWorld)
         local _, _, _, hex = WQT.GetClassColor(cData.class)
         local tag = (item.key == currentKey) and " |cff00e5ff(Current Alt)|r" or ""
-        print(string.format("  • |c%s%s|r%s: |cffffffffRaid:|r |c%s%d/3|r | |cffffffffMythic:|r |c%s%d/3|r | |cffffffffDelves:|r |c%s%d/3|r (|cffffcc00Total: %d/9|r)",
-            hex or "ffffffff", cData.name or item.key, tag,
+        local favStar = cData.favorite and "|cffffd100★ |r" or ""
+        print(string.format("  • %s|c%s%s|r%s: |cffffffffRaid:|r |c%s%d/3|r | |cffffffffMythic:|r |c%s%d/3|r | |cffffffffDelves:|r |c%s%d/3|r (|cffffcc00Total: %d/9|r)",
+            favStar, hex or "ffffffff", cData.name or item.key, tag,
             vRaid > 0 and "ff2ecc71" or "ffaaaaaa", vRaid,
             vMythic > 0 and "ff2ecc71" or "ffaaaaaa", vMythic,
             vWorld > 0 and "ff2ecc71" or "ffaaaaaa", vWorld,
@@ -338,6 +345,7 @@ function WQT.ScanCurrentCharacter()
             realm = realm,
             class = classFile,
             level = level,
+            favorite = false,
             quests = {},
         }
     else
@@ -583,10 +591,16 @@ function WQT.CheckAndShowLogoutReminder(isManualTest)
                     name = cData.name or cKey,
                     classHex = hex or "ffffffff",
                     pending = pCount,
+                    favorite = cData.favorite and true or false,
                 })
             end
         end
     end
+
+    table.sort(pendingAlts, function(a, b)
+        if a.favorite ~= b.favorite then return a.favorite end
+        return a.pending > b.pending
+    end)
 
     -- If no characters have pending quests
     if currentCharPending == 0 and #pendingAlts == 0 then
@@ -622,7 +636,8 @@ function WQT.CheckAndShowLogoutReminder(isManualTest)
     if #pendingAlts > 0 then
         local altStrs = {}
         for _, a in ipairs(pendingAlts) do
-            table.insert(altStrs, string.format("|c%s%s|r (|cffe74c3c%d|r)", a.classHex, a.name, a.pending))
+            local star = a.favorite and "|cffffd100★|r" or ""
+            table.insert(altStrs, string.format("%s|c%s%s|r (|cffe74c3c%d|r)", star, a.classHex, a.name, a.pending))
         end
         print(string.format("  • |cffffd100Other Incomplete Alts (%d):|r %s", #pendingAlts, table.concat(altStrs, ", ")))
     end
@@ -666,6 +681,29 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         WQT.CheckAndShowLogoutReminder(true)
     elseif cmd == "vault" or cmd == "gv" or cmd == "bank" then
         WQT.PrintVaultSummary()
+    elseif cmd == "fav" or cmd == "favorite" or cmd == "star" then
+        local targetKey = arg1 and arg1:lower()
+        local allChars = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.characters or {}
+        local foundKey = nil
+        if not targetKey or targetKey == "" then
+            foundKey = WQT.GetPlayerKey()
+        else
+            for k, c in pairs(allChars) do
+                if (c.name and c.name:lower() == targetKey) or k:lower():find(targetKey, 1, true) then
+                    foundKey = k
+                    break
+                end
+            end
+        end
+
+        if foundKey and allChars[foundKey] then
+            allChars[foundKey].favorite = not allChars[foundKey].favorite
+            local status = allChars[foundKey].favorite and "|cffffd100★ Favorited (Pinned to top)|r" or "|cffaaaaaaUnfavorited|r"
+            print(string.format("%s: %s is now %s.", WQT.ADDON_TITLE, allChars[foundKey].name or foundKey, status))
+            if WQT.RefreshUI then WQT.RefreshUI() end
+        else
+            print(string.format("%s: Character '%s' not found.", WQT.ADDON_TITLE, tostring(arg1 or "")))
+        end
     elseif cmd == "add" and arg1 then
         local qid = tonumber(arg1)
         local qname = arg2 and msg:match("add%s+%d+%s+(.+)")
@@ -679,6 +717,7 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         print("  |cff00ff00/wqt|r - Toggle tracker window")
         print("  |cff00ff00/wqt hud|r - Toggle Mini HUD floating bar on screen")
         print("  |cff00ff00/wqt vault|r - Show Great Vault summary across all alts")
+        print("  |cff00ff00/wqt fav [name]|r - Star/pin character as favorite")
         print("  |cff00ff00/wqt reminder|r - Test logout reminder alert")
         print("  |cff00ff00/wqt scan|r - Re-scan current character")
         print("  |cff00ff00/wqt check [name]|r - Inspect quests and IDs in your log")
