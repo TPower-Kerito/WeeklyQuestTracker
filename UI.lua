@@ -1984,16 +1984,18 @@ function WQT.CreateMiniHUD()
     iconTex:SetTexture(curIcon)
     hud.iconTex = iconTex
 
-    -- Smart tooltip anchor helper to prevent any overlap
-    local function GetSmartHUDAnchor(anchorFrame)
-        local y = anchorFrame:GetCenter()
-        local screenH = GetScreenHeight() or 768
-        if y and (y > screenH / 2) then
-            -- Top half of screen: Tooltip appears cleanly BELOW the bar
-            return "ANCHOR_BOTTOM", 0, -8
+    -- Smart explicit tooltip anchor to guarantee zero overlap across all screen positions
+    local function AnchorHUDTooltip(targetFrame)
+        local cx, cy = hud:GetCenter()
+        local parentH = (UIParent and UIParent:GetHeight()) or 768
+        GameTooltip:SetOwner(targetFrame, "ANCHOR_NONE")
+        GameTooltip:ClearAllPoints()
+        if cy and (cy > parentH / 2) then
+            -- Bar is in top half of screen: firmly place tooltip BELOW the bar with clean 8px margin
+            GameTooltip:SetPoint("TOP", targetFrame, "BOTTOM", 0, -8)
         else
-            -- Bottom half of screen: Tooltip appears cleanly ABOVE the bar
-            return "ANCHOR_TOP", 0, 8
+            -- Bar is in bottom half of screen: firmly place tooltip ABOVE the bar with clean 8px margin
+            GameTooltip:SetPoint("BOTTOM", targetFrame, "TOP", 0, 8)
         end
     end
 
@@ -2017,8 +2019,7 @@ function WQT.CreateMiniHUD()
 
         slot:SetScript("OnEnter", function(self)
             if self.questName then
-                local anchor, ox, oy = GetSmartHUDAnchor(hud)
-                GameTooltip:SetOwner(self, anchor, ox, oy)
+                AnchorHUDTooltip(self)
                 GameTooltip:AddLine(self.questName, 1, 0.85, 0)
                 GameTooltip:AddLine("Status: " .. (self.statusText or "Incomplete"), 1, 1, 1)
                 GameTooltip:AddLine("|cff888888Click: Open tracker|r", 0.7, 0.7, 0.7)
@@ -2046,8 +2047,7 @@ function WQT.CreateMiniHUD()
 
     hud:SetScript("OnEnter", function(self)
         self:SetBackdropBorderColor(1.0, 0.85, 0.2, 1)
-        local anchor, ox, oy = GetSmartHUDAnchor(self)
-        GameTooltip:SetOwner(self, anchor, ox, oy)
+        AnchorHUDTooltip(self)
         GameTooltip:AddLine(WQT.ADDON_TITLE .. " |cff888888(Mini HUD)|r", 1, 1, 1)
 
         local currentKey = WQT.GetPlayerKey()
