@@ -700,6 +700,59 @@ function WQT.RefreshUI()
 end
 
 -- =========================================================================
+-- FAVORITE STAR BUTTON HELPER
+-- =========================================================================
+local function SetupFavoriteStarButton(btn, starSize, isFav, onClickCallback, tooltipTitle)
+    local tex = btn:CreateTexture(nil, "ARTWORK")
+    tex:SetSize(starSize or 16, starSize or 16)
+    tex:SetPoint("CENTER", btn, "CENTER", 0, 0)
+    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo("PetJournal-FavoritesIcon") then
+        tex:SetAtlas("PetJournal-FavoritesIcon")
+    else
+        tex:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcon_1")
+    end
+
+    local function ApplyVisual(hover)
+        if hover then
+            tex:SetDesaturated(false)
+            tex:SetVertexColor(1, 0.9, 0.2)
+            tex:SetAlpha(1.0)
+        elseif isFav then
+            tex:SetDesaturated(false)
+            tex:SetVertexColor(1, 1, 1)
+            tex:SetAlpha(1.0)
+        else
+            tex:SetDesaturated(true)
+            tex:SetVertexColor(0.65, 0.65, 0.65)
+            tex:SetAlpha(0.45)
+        end
+    end
+
+    ApplyVisual(false)
+
+    btn:SetScript("OnClick", function()
+        if onClickCallback then
+            onClickCallback()
+        end
+    end)
+
+    btn:SetScript("OnEnter", function(self)
+        ApplyVisual(true)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine(tooltipTitle or (isFav and "Favorite Alt (Pinned to top)" or "Mark as Favorite / Main"), 1, 0.82, 0)
+        GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+
+    btn:SetScript("OnLeave", function(self)
+        ApplyVisual(false)
+        GameTooltip:Hide()
+    end)
+
+    return tex
+end
+
+-- =========================================================================
 -- VIEW 0: CURRENT CHARACTER FOCUSED VIEW
 -- =========================================================================
 function WQT.RenderCurrentCharacterView(quests, startY)
@@ -754,11 +807,7 @@ function WQT.RenderCurrentCharacterView(quests, startY)
     local favBtn = CreateFrame("Button", nil, heroCard)
     favBtn:SetSize(22, 22)
     favBtn:SetPoint("TOPLEFT", 14, -13)
-    local favText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    favText:SetPoint("CENTER", 0, 0)
-    favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-
-    favBtn:SetScript("OnClick", function()
+    SetupFavoriteStarButton(favBtn, 18, isFav, function()
         if charData then
             charData.favorite = not charData.favorite
             if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
@@ -766,18 +815,7 @@ function WQT.RenderCurrentCharacterView(quests, startY)
             end
             WQT.RefreshUI()
         end
-    end)
-    favBtn:SetScript("OnEnter", function(self)
-        favText:SetText("|cffffd100★|r")
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        GameTooltip:AddLine(isFav and "Favorite Alt (Pinned)" or "Mark as Favorite / Main", 1, 0.82, 0)
-        GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
-        GameTooltip:Show()
-    end)
-    favBtn:SetScript("OnLeave", function(self)
-        favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-        GameTooltip:Hide()
-    end)
+    end, isFav and "Favorite Alt (Pinned)" or "Mark as Favorite / Main")
 
     local heroName = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     heroName:SetPoint("LEFT", favBtn, "RIGHT", 4, 0)
@@ -1124,27 +1162,14 @@ function WQT.RenderGridView(sortedChars, quests, startY)
         local starBtn = CreateFrame("Button", nil, row)
         starBtn:SetSize(18, 18)
         starBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
-        local starText = starBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        starText:SetPoint("CENTER", 0, 0)
-        starText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-
-        starBtn:SetScript("OnClick", function()
-            charData.favorite = not charData.favorite
-            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
-                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        SetupFavoriteStarButton(starBtn, 16, isFav, function()
+            if charData then
+                charData.favorite = not charData.favorite
+                if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+                end
+                WQT.RefreshUI()
             end
-            WQT.RefreshUI()
-        end)
-        starBtn:SetScript("OnEnter", function(self)
-            starText:SetText("|cffffd100★|r")
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:AddLine(isFav and "Favorite Alt (Pinned to top)" or "Mark as Favorite / Main", 1, 0.82, 0)
-            GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
-            GameTooltip:Show()
-        end)
-        starBtn:SetScript("OnLeave", function(self)
-            starText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-            GameTooltip:Hide()
         end)
 
         local charBtn = CreateFrame("Button", nil, row)
@@ -1309,27 +1334,14 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
         local favBtn = CreateFrame("Button", nil, card)
         favBtn:SetSize(18, 18)
         favBtn:SetPoint("TOPLEFT", 10, -9)
-        local favText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
-        favText:SetPoint("CENTER", 0, 0)
-        favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-
-        favBtn:SetScript("OnClick", function()
-            charData.favorite = not charData.favorite
-            if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
-                PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+        SetupFavoriteStarButton(favBtn, 16, isFav, function()
+            if charData then
+                charData.favorite = not charData.favorite
+                if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
+                    PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+                end
+                WQT.RefreshUI()
             end
-            WQT.RefreshUI()
-        end)
-        favBtn:SetScript("OnEnter", function(self)
-            favText:SetText("|cffffd100★|r")
-            GameTooltip:SetOwner(self, "ANCHOR_TOP")
-            GameTooltip:AddLine(isFav and "Favorite Alt (Pinned to top)" or "Mark as Favorite / Main", 1, 0.82, 0)
-            GameTooltip:AddLine("Click to toggle favorite status.", 0.8, 0.8, 0.8)
-            GameTooltip:Show()
-        end)
-        favBtn:SetScript("OnLeave", function(self)
-            favText:SetText(isFav and "|cffffd100★|r" or "|cff555555☆|r")
-            GameTooltip:Hide()
         end)
 
         local cardTitle = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
@@ -1954,7 +1966,7 @@ function WQT.RenderSettingsView(startY)
         end
         local favBtnText = favBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         favBtnText:SetPoint("CENTER", 0, 0)
-        favBtnText:SetText(isFav and "|cffffd100★ Favorited|r" or "|cff888888☆ Favorite|r")
+        favBtnText:SetText(isFav and "|cffffd100★ Favorited|r" or "|cff888888+ Favorite|r")
         favBtn:SetScript("OnClick", function()
             cData.favorite = not cData.favorite
             if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings and WeeklyQuestTrackerDB.settings.soundFeedback ~= false then
