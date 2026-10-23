@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.0.6"
+WQT.VERSION = "1.0.7"
 WQT.ADDON_TITLE = "|cff00ccffWeekly Quest Tracker|r"
 
 -- Default Tracked Quests
@@ -56,7 +56,7 @@ WQT.DEFAULT_QUESTS = {
 
 -- Default Addon Configuration
 WQT.DEFAULT_CONFIG = {
-    viewMode = "grid", -- "grid", "cards", "todo", or "combined"
+    viewMode = "current", -- "current", "grid", "cards", "todo", or "combined"
     showMinimapButton = true,
     minimapAngle = 45,
     autoOpenOnLogin = false,
@@ -77,6 +77,12 @@ WQT.STATUS_DONE     = WQT.ICON_CHECK .. " |cff2ecc71Done|r"
 WQT.STATUS_READY    = WQT.ICON_READY .. " |cff00ccffReady to Turn In|r"
 WQT.STATUS_PROGRESS = WQT.ICON_PROGRESS .. " |cfff39c12In Progress|r"
 WQT.STATUS_TODO     = WQT.ICON_CROSS .. " |cffe74c3cIncomplete|r"
+
+-- Short Compact Statuses for Grid Matrix Table
+WQT.STATUS_DONE_SHORT     = WQT.ICON_CHECK .. " |cff2ecc71Done|r"
+WQT.STATUS_READY_SHORT    = WQT.ICON_READY .. " |cff00e5ffReady|r"
+WQT.STATUS_PROGRESS_SHORT = WQT.ICON_PROGRESS .. " |cfff39c12Active|r"
+WQT.STATUS_TODO_SHORT     = WQT.ICON_CROSS .. " |cffe74c3cTo-Do|r"
 
 -- Safe Class Color lookup
 function WQT.GetClassColor(classFileName)

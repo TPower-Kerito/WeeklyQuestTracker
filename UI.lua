@@ -46,18 +46,20 @@ local function GetFormattedName(charData)
     return string.format("%s|c%s%s|r", iconPrefix, hex, charData.name or "Unknown")
 end
 
--- Resolve Full Status Display String
-function WQT.GetStatusString(qStatus)
-    if not qStatus then return WQT.STATUS_TODO end
+-- Resolve Full or Compact Status Display String
+function WQT.GetStatusString(qStatus, isShort)
+    if not qStatus then
+        return isShort and WQT.STATUS_TODO_SHORT or WQT.STATUS_TODO
+    end
     local state = qStatus.state
     if state == "DONE" or (state == nil and qStatus.completed) then
-        return WQT.STATUS_DONE
+        return isShort and WQT.STATUS_DONE_SHORT or WQT.STATUS_DONE
     elseif state == "READY" or qStatus.readyToTurnIn then
-        return WQT.STATUS_READY
+        return isShort and WQT.STATUS_READY_SHORT or WQT.STATUS_READY
     elseif state == "PROGRESS" or qStatus.inProgress then
-        return WQT.STATUS_PROGRESS
+        return isShort and WQT.STATUS_PROGRESS_SHORT or WQT.STATUS_PROGRESS
     else
-        return WQT.STATUS_TODO
+        return isShort and WQT.STATUS_TODO_SHORT or WQT.STATUS_TODO
     end
 end
 
@@ -68,7 +70,7 @@ function WQT.CreateMainFrame()
     if mainFrame then return mainFrame end
 
     local f = CreateFrame("Frame", "WQT_MainFrame", UIParent, "BackdropTemplate")
-    f:SetSize(930, 560)
+    f:SetSize(1040, 600)
     f:SetPoint("CENTER")
     f:SetMovable(true)
     f:EnableMouse(true)
@@ -138,7 +140,7 @@ function WQT.CreateMainFrame()
         WQT.ShowAddQuestDialog()
     end)
 
-    -- Tab Switcher Bar
+    -- Tab Switcher Bar (5 Tabs)
     local tabBar = CreateFrame("Frame", nil, f)
     tabBar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -6)
     tabBar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -6, -6)
@@ -146,7 +148,8 @@ function WQT.CreateMainFrame()
 
     local tabButtons = {}
     local tabs = {
-        { id = "grid", label = "Grid" },
+        { id = "current", label = "⭐ Current Alt" },
+        { id = "grid", label = "Grid (All Alts)" },
         { id = "cards", label = "Cards" },
         { id = "todo", label = "To-Do List" },
         { id = "combined", label = "Combined" },
@@ -155,7 +158,7 @@ function WQT.CreateMainFrame()
     local lastBtn = nil
     for _, t in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, tabBar, "BackdropTemplate")
-        btn:SetSize(120, 26)
+        btn:SetSize(148, 26)
         if not lastBtn then
             btn:SetPoint("LEFT", tabBar, "LEFT", 0, 0)
         else
@@ -186,7 +189,7 @@ function WQT.CreateMainFrame()
     scrollFrame:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -26, 32)
 
     contentScrollChild = CreateFrame("Frame", nil, scrollFrame)
-    contentScrollChild:SetSize(scrollFrame:GetWidth() or 880, 1)
+    contentScrollChild:SetSize(scrollFrame:GetWidth() or 990, 1)
     scrollFrame:SetScrollChild(contentScrollChild)
     f.scrollChild = contentScrollChild
 
@@ -217,7 +220,7 @@ end
 -- VIEW MODE SWITCHER
 -- =========================================================================
 function WQT.SetViewMode(mode)
-    activeTab = mode or "grid"
+    activeTab = mode or "current"
     if WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.settings then
         WeeklyQuestTrackerDB.settings.viewMode = activeTab
     end
@@ -266,7 +269,9 @@ function WQT.RefreshUI()
     end
     table.sort(sortedChars, function(a, b) return (a.data.name or "") < (b.data.name or "") end)
 
-    if activeTab == "grid" then
+    if activeTab == "current" then
+        WQT.RenderCurrentCharacterView(quests, 0)
+    elseif activeTab == "grid" then
         WQT.RenderGridView(sortedChars, quests, 0)
     elseif activeTab == "cards" then
         WQT.RenderCardsView(sortedChars, quests, 0)
@@ -279,25 +284,280 @@ function WQT.RefreshUI()
 end
 
 -- =========================================================================
+-- VIEW 0: CURRENT CHARACTER FOCUSED VIEW
+-- =========================================================================
+function WQT.RenderCurrentCharacterView(quests, startY)
+    local parent = contentScrollChild
+    local currentY = startY or 0
+    local totalWidth = 980
+
+    local currentKey = WQT.GetPlayerKey()
+    local charData = WeeklyQuestTrackerDB.characters and WeeklyQuestTrackerDB.characters[currentKey]
+    if not charData then
+        WQT.ScanCurrentCharacter()
+        charData = WeeklyQuestTrackerDB.characters and WeeklyQuestTrackerDB.characters[currentKey]
+    end
+
+    local name = UnitName("player")
+    local realm = GetNormalizedRealmName() or GetRealmName() or ""
+    local _, classFile = UnitClass("player")
+    local level = UnitLevel("player")
+    local classColorHex = WQT.CLASS_COLORS[classFile] or "ffffffff"
+
+    local charQuests = (charData and charData.quests) or {}
+    local totalQuests = #quests
+    local doneCount = 0
+    local readyCount = 0
+    local progressCount = 0
+    local incompleteCount = 0
+
+    for _, q in ipairs(quests) do
+        local qs = charQuests[q.name]
+        if qs and (qs.state == "DONE" or qs.completed) then
+            doneCount = doneCount + 1
+        elseif qs and (qs.state == "READY" or qs.readyToTurnIn) then
+            readyCount = readyCount + 1
+        elseif qs and (qs.state == "PROGRESS" or qs.inProgress) then
+            progressCount = progressCount + 1
+        else
+            incompleteCount = incompleteCount + 1
+        end
+    end
+
+    -- 1. Hero Spotlight Header Card (Height: 96px)
+    local heroCard = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    heroCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    heroCard:SetSize(totalWidth, 96)
+    heroCard:SetBackdrop(CARD_BACKDROP)
+    heroCard:SetBackdropColor(0.12, 0.14, 0.20, 0.98)
+    heroCard:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
+
+    -- Character Name & Details
+    local heroName = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    heroName:SetPoint("TOPLEFT", 16, -14)
+    heroName:SetText(string.format("|c%s%s|r |cff00e5ff(Current Alt)|r", classColorHex, name))
+
+    local heroDetails = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    heroDetails:SetPoint("TOPLEFT", 16, -38)
+    local localizedClass = UnitClass("player")
+    heroDetails:SetText(string.format("Level %d %s • Realm: |cffffd100%s|r", level, localizedClass or classFile or "", realm))
+
+    -- Quick Scan Button
+    local scanBtn = CreateFrame("Button", nil, heroCard, "BackdropTemplate")
+    scanBtn:SetSize(148, 24)
+    scanBtn:SetPoint("TOPLEFT", 16, -62)
+    scanBtn:SetBackdrop(CARD_BACKDROP)
+    scanBtn:SetBackdropColor(0.16, 0.24, 0.36, 1)
+    scanBtn:SetBackdropBorderColor(0.3, 0.6, 0.9, 0.9)
+    local scanBtnText = scanBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    scanBtnText:SetPoint("CENTER", 0, 0)
+    scanBtnText:SetText("|cff00e5ff🔄 Re-Scan Current Alt|r")
+    scanBtn:SetScript("OnClick", function()
+        WQT.ScanCurrentCharacter()
+        print(string.format("%s: Re-scanned %s successfully.", WQT.ADDON_TITLE, name))
+        WQT.RefreshUI()
+    end)
+    scanBtn:SetScript("OnEnter", function(self)
+        self:SetBackdropColor(0.22, 0.32, 0.48, 1)
+        self:SetBackdropBorderColor(0.4, 0.8, 1.0, 1)
+    end)
+    scanBtn:SetScript("OnLeave", function(self)
+        self:SetBackdropColor(0.16, 0.24, 0.36, 1)
+        self:SetBackdropBorderColor(0.3, 0.6, 0.9, 0.9)
+    end)
+
+    -- Right Side: Progress Bar & Status Counters
+    local progressPercent = totalQuests > 0 and math.floor((doneCount / totalQuests) * 100) or 0
+    local progressLabel = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+    progressLabel:SetPoint("TOPRIGHT", -16, -14)
+    progressLabel:SetText(string.format("Weekly Completion: |cff2ecc71%d / %d|r (|cffffd100%d%%|r)", doneCount, totalQuests, progressPercent))
+
+    local pBar = CreateFrame("StatusBar", nil, heroCard)
+    pBar:SetSize(280, 14)
+    pBar:SetPoint("TOPRIGHT", -16, -38)
+    pBar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    pBar:SetMinMaxValues(0, math.max(totalQuests, 1))
+    pBar:SetValue(doneCount)
+    if doneCount == totalQuests and totalQuests > 0 then
+        pBar:SetStatusBarColor(0.18, 0.80, 0.44)
+    else
+        pBar:SetStatusBarColor(0.0, 0.75, 1.0)
+    end
+
+    local pBarBg = pBar:CreateTexture(nil, "BACKGROUND")
+    pBarBg:SetAllPoints()
+    pBarBg:SetColorTexture(0.08, 0.09, 0.12, 0.9)
+
+    local badgesLabel = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    badgesLabel:SetPoint("TOPRIGHT", -16, -64)
+    badgesLabel:SetText(string.format("%s |cff2ecc71%d Done|r   %s |cff00e5ff%d Ready|r   %s |cfff39c12%d Active|r   %s |cffe74c3c%d To-Do|r",
+        WQT.ICON_CHECK, doneCount,
+        WQT.ICON_READY, readyCount,
+        WQT.ICON_PROGRESS, progressCount,
+        WQT.ICON_CROSS, incompleteCount))
+
+    currentY = currentY - 108
+
+    -- 2. Section Header: Weekly Tasks List
+    local listHeader = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    listHeader:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    listHeader:SetSize(totalWidth, 28)
+    listHeader:SetBackdrop(CARD_BACKDROP)
+    listHeader:SetBackdropColor(0.15, 0.17, 0.22, 1)
+    listHeader:SetBackdropBorderColor(0.35, 0.40, 0.50, 0.9)
+
+    local listTitle = listHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    listTitle:SetPoint("LEFT", 12, 0)
+    listTitle:SetText("|cffffd100Weekly Quests for " .. name .. "|r")
+
+    local listHint = listHeader:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    listHint:SetPoint("RIGHT", -12, 0)
+    listHint:SetText("|cffaaaaaaShift + Left-Click any card to cycle status manually|r")
+
+    currentY = currentY - 34
+
+    -- 3. The 6 Individual Quest Cards (Height: 52px each)
+    local cardHeight = 52
+    for index, q in ipairs(quests) do
+        local qName = q.name
+        local qs = charQuests[qName]
+        local state = qs and qs.state or (qs and qs.completed and "DONE") or "INCOMPLETE"
+
+        local rowCard = CreateFrame("Button", nil, parent, "BackdropTemplate")
+        rowCard:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+        rowCard:SetSize(totalWidth, cardHeight)
+        rowCard:SetBackdrop(CARD_BACKDROP)
+
+        if state == "DONE" then
+            rowCard:SetBackdropColor(0.09, 0.16, 0.11, 0.95)
+            rowCard:SetBackdropBorderColor(0.20, 0.65, 0.35, 0.85)
+        elseif state == "READY" then
+            rowCard:SetBackdropColor(0.08, 0.17, 0.24, 0.95)
+            rowCard:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
+        elseif state == "PROGRESS" then
+            rowCard:SetBackdropColor(0.18, 0.15, 0.08, 0.95)
+            rowCard:SetBackdropBorderColor(0.95, 0.70, 0.15, 0.95)
+        else
+            rowCard:SetBackdropColor(0.10, 0.11, 0.14, 0.9)
+            rowCard:SetBackdropBorderColor(0.25, 0.28, 0.35, 0.7)
+        end
+
+        local numBadge = CreateFrame("Frame", nil, rowCard, "BackdropTemplate")
+        numBadge:SetSize(28, 28)
+        numBadge:SetPoint("LEFT", 12, 0)
+        numBadge:SetBackdrop(CARD_BACKDROP)
+        numBadge:SetBackdropColor(0.18, 0.20, 0.26, 1)
+        numBadge:SetBackdropBorderColor(0.35, 0.40, 0.50, 0.8)
+        local numText = numBadge:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        numText:SetPoint("CENTER", 0, 0)
+        numText:SetText(tostring(index))
+
+        local qTitle = rowCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
+        qTitle:SetPoint("TOPLEFT", numBadge, "TOPRIGHT", 12, -4)
+        qTitle:SetText("|cffffd100" .. qName .. "|r")
+
+        local qSub = rowCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        qSub:SetPoint("BOTTOMLEFT", numBadge, "BOTTOMRIGHT", 12, 4)
+        local hint = "Weekly Quest"
+        if qName:find("Unity Against the Void") then
+            hint = "Midnight Choice: Arcantina • Abundance • Ritual Sites • Delves"
+        elseif qName:find("Runestones") then
+            hint = "Hallowfall / Midnight Weekly Defense"
+        elseif qName:find("Turn Back the Surge") then
+            hint = "Coiled Isle • The Cursed Surge Public Event"
+        elseif qName:find("Root of the World") then
+            hint = "Haranir Relics & Sacred Legends"
+        elseif qName:find("Offerings") then
+            hint = "Loa of Abundance Weekly Harvest"
+        elseif qName:find("Trailing Xal") then
+            hint = "Weekly Storyline Investigation"
+        end
+        qSub:SetText("|cff999999" .. hint .. "|r")
+
+        local statusPill = CreateFrame("Frame", nil, rowCard, "BackdropTemplate")
+        statusPill:SetSize(185, 32)
+        statusPill:SetPoint("RIGHT", rowCard, "RIGHT", -12, 0)
+        statusPill:SetBackdrop(CARD_BACKDROP)
+
+        local pillText = statusPill:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        pillText:SetPoint("CENTER", 0, 0)
+
+        if state == "DONE" then
+            statusPill:SetBackdropColor(0.10, 0.25, 0.14, 0.95)
+            statusPill:SetBackdropBorderColor(0.25, 0.85, 0.40, 1)
+            pillText:SetText(WQT.ICON_CHECK .. "  |cff2ecc71DONE|r")
+        elseif state == "READY" then
+            statusPill:SetBackdropColor(0.08, 0.22, 0.28, 0.95)
+            statusPill:SetBackdropBorderColor(0.0, 0.85, 1.0, 1)
+            pillText:SetText(WQT.ICON_READY .. "  |cff00e5ffREADY TO TURN IN|r")
+        elseif state == "PROGRESS" then
+            statusPill:SetBackdropColor(0.24, 0.18, 0.08, 0.95)
+            statusPill:SetBackdropBorderColor(0.95, 0.70, 0.15, 1)
+            pillText:SetText(WQT.ICON_PROGRESS .. "  |cfff39c12IN PROGRESS|r")
+        else
+            statusPill:SetBackdropColor(0.14, 0.12, 0.14, 0.9)
+            statusPill:SetBackdropBorderColor(0.60, 0.25, 0.25, 0.8)
+            pillText:SetText(WQT.ICON_CROSS .. "  |cffe74c3cINCOMPLETE|r")
+        end
+
+        rowCard:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        rowCard:SetScript("OnEnter", function(self)
+            self:SetBackdropBorderColor(1.0, 0.85, 0.2, 1)
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+            GameTooltip:AddLine(qName, 1, 0.82, 0)
+            GameTooltip:AddLine("Status: " .. state, 1, 1, 1)
+            GameTooltip:AddLine("Tracked IDs: " .. table.concat(q.ids or {}, ", "), 0.7, 0.7, 0.7)
+            GameTooltip:AddLine(" ", 1, 1, 1)
+            GameTooltip:AddLine("|cffffcc00Shift + Left-Click: Cycle status manually|r", 0.9, 0.9, 0.2)
+            GameTooltip:Show()
+        end)
+        rowCard:SetScript("OnLeave", function(self)
+            if state == "DONE" then
+                self:SetBackdropBorderColor(0.20, 0.65, 0.35, 0.85)
+            elseif state == "READY" then
+                self:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
+            elseif state == "PROGRESS" then
+                self:SetBackdropBorderColor(0.95, 0.70, 0.15, 0.95)
+            else
+                self:SetBackdropBorderColor(0.25, 0.28, 0.35, 0.7)
+            end
+            GameTooltip:Hide()
+        end)
+        rowCard:SetScript("OnClick", function(self, button)
+            if IsShiftKeyDown() and button == "LeftButton" then
+                WQT.ToggleQuestStatus(currentKey, qName)
+            end
+        end)
+
+        currentY = currentY - (cardHeight + 6)
+    end
+
+    parent:SetHeight(math.abs(currentY) + 50)
+    return currentY
+end
+
+-- =========================================================================
 -- VIEW 1: GRID VIEW (MATRIX TABLE)
 -- =========================================================================
 function WQT.RenderGridView(sortedChars, quests, startY)
     local parent = contentScrollChild
-    local headerHeight = 36
-    local rowHeight = 28
-    local colCharWidth = 190
-    local availableWidth = 870 - colCharWidth
+    local headerHeight = 44
+    local rowHeight = 32
+    local colCharWidth = 165
+    local totalWidth = 980
+    local availableWidth = totalWidth - colCharWidth
     local numQuests = math.max(#quests, 1)
-    local colQuestWidth = math.max(math.floor(availableWidth / numQuests), 155)
+    local colQuestWidth = math.floor(availableWidth / numQuests)
     local totalRowWidth = colCharWidth + (#quests * colQuestWidth)
     local currentY = startY or 0
+    local currentKey = WQT.GetPlayerKey()
 
     local headerRow = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    headerRow:SetPoint("TOPLEFT", parent, "TOPLEFT", 2, currentY)
+    headerRow:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
     headerRow:SetSize(totalRowWidth, headerHeight)
     headerRow:SetBackdrop(CARD_BACKDROP)
-    headerRow:SetBackdropColor(0.15, 0.17, 0.22, 1)
-    headerRow:SetBackdropBorderColor(0.35, 0.40, 0.50, 0.9)
+    headerRow:SetBackdropColor(0.14, 0.16, 0.22, 1)
+    headerRow:SetBackdropBorderColor(0.35, 0.40, 0.52, 0.9)
 
     local charHeaderLabel = headerRow:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     charHeaderLabel:SetPoint("LEFT", 10, 0)
@@ -310,7 +570,8 @@ function WQT.RenderGridView(sortedChars, quests, startY)
 
         local qText = qHeader:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         qText:SetPoint("CENTER", 0, 0)
-        qText:SetWidth(colQuestWidth - 8)
+        qText:SetWidth(colQuestWidth - 6)
+        qText:SetHeight(38)
         qText:SetWordWrap(true)
         qText:SetJustifyH("CENTER")
         qText:SetText("|cffffd100" .. q.name .. "|r")
@@ -345,19 +606,24 @@ function WQT.RenderGridView(sortedChars, quests, startY)
     for rowIndex, charItem in ipairs(sortedChars) do
         local charKey = charItem.key
         local charData = charItem.data
+        local isCurrentChar = (charKey == currentKey)
+        local isEven = (rowIndex % 2 == 0)
 
         local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-        row:SetPoint("TOPLEFT", parent, "TOPLEFT", 2, currentY)
+        row:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
         row:SetSize(totalRowWidth, rowHeight)
         row:SetBackdrop(CARD_BACKDROP)
 
-        local isEven = (rowIndex % 2 == 0)
-        local baseBgR = isEven and 0.09 or 0.13
-        local baseBgG = isEven and 0.10 or 0.14
-        local baseBgB = isEven and 0.13 or 0.17
-
-        row:SetBackdropColor(baseBgR, baseBgG, baseBgB, 0.9)
-        row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
+        if isCurrentChar then
+            row:SetBackdropColor(0.14, 0.18, 0.28, 0.98)
+            row:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
+        else
+            local baseBgR = isEven and 0.08 or 0.12
+            local baseBgG = isEven and 0.09 or 0.13
+            local baseBgB = isEven and 0.12 or 0.16
+            row:SetBackdropColor(baseBgR, baseBgG, baseBgB, 0.9)
+            row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
+        end
 
         local charBtn = CreateFrame("Button", nil, row)
         charBtn:SetPoint("LEFT", row, "LEFT", 4, 0)
@@ -365,15 +631,24 @@ function WQT.RenderGridView(sortedChars, quests, startY)
 
         local charLabel = charBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         charLabel:SetPoint("LEFT", 4, 0)
-        charLabel:SetText(string.format("%s |cff888888(%s)|r", GetFormattedName(charData), charData.realm or ""))
+        local charPrefix = isCurrentChar and "|cff00e5ff★ |r" or ""
+        local charSuffix = isCurrentChar and " |cff00e5ff(You)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+        charLabel:SetText(charPrefix .. GetFormattedName(charData) .. charSuffix)
 
         charBtn:SetScript("OnEnter", function()
-            row:SetBackdropColor(0.20, 0.24, 0.32, 1)
-            row:SetBackdropBorderColor(0.4, 0.5, 0.7, 0.8)
+            if not isCurrentChar then
+                row:SetBackdropColor(0.20, 0.24, 0.32, 1)
+                row:SetBackdropBorderColor(0.4, 0.5, 0.7, 0.8)
+            end
         end)
         charBtn:SetScript("OnLeave", function()
-            row:SetBackdropColor(baseBgR, baseBgG, baseBgB, 0.9)
-            row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
+            if not isCurrentChar then
+                local baseBgR = isEven and 0.08 or 0.12
+                local baseBgG = isEven and 0.09 or 0.13
+                local baseBgB = isEven and 0.12 or 0.16
+                row:SetBackdropColor(baseBgR, baseBgG, baseBgB, 0.9)
+                row:SetBackdropBorderColor(0.22, 0.24, 0.30, 0.5)
+            end
         end)
 
         charBtn:RegisterForClicks("RightButtonUp")
@@ -402,7 +677,7 @@ function WQT.RenderGridView(sortedChars, quests, startY)
             statusText:SetPoint("CENTER", 0, 0)
 
             local qStatus = charData.quests and charData.quests[q.name]
-            statusText:SetText(WQT.GetStatusString(qStatus))
+            statusText:SetText(WQT.GetStatusString(qStatus, true)) -- Compact short status!
 
             cell:SetScript("OnClick", function(self)
                 if IsShiftKeyDown() then
@@ -413,7 +688,7 @@ function WQT.RenderGridView(sortedChars, quests, startY)
             cell:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 GameTooltip:AddLine(charData.name .. " - " .. q.name, 1, 0.82, 0)
-                GameTooltip:AddLine("Current State: " .. WQT.GetStatusString(qStatus))
+                GameTooltip:AddLine("Current State: " .. WQT.GetStatusString(qStatus, false))
                 GameTooltip:AddLine("|cffffcc00Shift + Click:|r Cycle status manually (Done / Ready / In Progress / Incomplete)", 0.8, 0.8, 0.8)
                 GameTooltip:Show()
             end)
@@ -432,16 +707,19 @@ end
 -- =========================================================================
 function WQT.RenderCardsView(sortedChars, quests, startY)
     local parent = contentScrollChild
-    local cardWidth = 425
+    local totalWidth = 980
+    local cardWidth = 484
     local currentY = startY or 0
     local isLeft = true
     local totalQuests = #quests
-    local cardHeight = 65 + (totalQuests * 20)
+    local cardHeight = 65 + (totalQuests * 22)
+    local currentKey = WQT.GetPlayerKey()
 
     for index, charItem in ipairs(sortedChars) do
         local charKey = charItem.key
         local charData = charItem.data
         local charQuests = charData.quests or {}
+        local isCurrentChar = (charKey == currentKey)
 
         local completedCount = 0
         local readyCount = 0
@@ -457,25 +735,32 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
         local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
         card:SetSize(cardWidth, cardHeight)
         card:SetBackdrop(CARD_BACKDROP)
-        card:SetBackdropColor(0.11, 0.12, 0.16, 0.95)
-        card:SetBackdropBorderColor(0.28, 0.32, 0.40, 0.9)
+
+        if isCurrentChar then
+            card:SetBackdropColor(0.13, 0.16, 0.25, 0.98)
+            card:SetBackdropBorderColor(0.0, 0.85, 1.0, 1.0)
+        else
+            card:SetBackdropColor(0.10, 0.11, 0.15, 0.95)
+            card:SetBackdropBorderColor(0.26, 0.30, 0.38, 0.85)
+        end
 
         if isLeft then
-            card:SetPoint("TOPLEFT", parent, "TOPLEFT", 10, currentY)
+            card:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
         else
-            card:SetPoint("TOPLEFT", parent, "TOPLEFT", 24 + cardWidth, currentY)
+            card:SetPoint("TOPLEFT", parent, "TOPLEFT", 496, currentY)
         end
 
         local cardTitle = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
         cardTitle:SetPoint("TOPLEFT", 12, -10)
-        cardTitle:SetText(GetFormattedName(charData) .. " |cff888888(" .. (charData.realm or "") .. ")|r")
+        local tag = isCurrentChar and " |cff00e5ff★ (Current)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+        cardTitle:SetText(GetFormattedName(charData) .. tag)
 
         local badge = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         badge:SetPoint("TOPRIGHT", -12, -10)
         if completedCount == totalQuests and totalQuests > 0 then
             badge:SetText("|cff2ecc71" .. completedCount .. " / " .. totalQuests .. " Done|r")
         elseif readyCount > 0 then
-            badge:SetText(string.format("|cff00ccff%d Ready to Turn In|r", readyCount))
+            badge:SetText(string.format("|cff00e5ff%d Ready to Turn In|r", readyCount))
         else
             badge:SetText(string.format("|cffffcc00%d / %d Done|r", completedCount, totalQuests))
         end
@@ -496,11 +781,14 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
         for _, q in ipairs(quests) do
             local qBtn = CreateFrame("Button", nil, card)
             qBtn:SetPoint("TOPLEFT", 14, qItemY)
-            qBtn:SetSize(cardWidth - 28, 18)
+            qBtn:SetSize(cardWidth - 28, 20)
             qBtn:RegisterForClicks("LeftButtonUp")
 
             local qLine = qBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             qLine:SetPoint("LEFT", 0, 0)
+            qLine:SetWidth(cardWidth - 170)
+            qLine:SetWordWrap(false)
+            qLine:SetJustifyH("LEFT")
             qLine:SetText(q.name)
 
             local statusIcon = qBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -515,11 +803,11 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
                 end
             end)
 
-            qItemY = qItemY - 20
+            qItemY = qItemY - 22
         end
 
         if not isLeft then
-            currentY = currentY - (cardHeight + 14)
+            currentY = currentY - (cardHeight + 12)
             isLeft = true
         else
             isLeft = false
@@ -527,7 +815,7 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
     end
 
     if not isLeft then
-        currentY = currentY - (cardHeight + 14)
+        currentY = currentY - (cardHeight + 12)
     end
 
     parent:SetHeight(math.abs(currentY) + 50)
@@ -540,10 +828,12 @@ end
 function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
     local parent = contentScrollChild
     local currentY = startY or 0
+    local totalWidth = 980
+    local currentKey = WQT.GetPlayerKey()
 
     local sectionHeader = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    sectionHeader:SetPoint("TOPLEFT", parent, "TOPLEFT", 2, currentY)
-    sectionHeader:SetSize(870, 28)
+    sectionHeader:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+    sectionHeader:SetSize(totalWidth, 28)
     sectionHeader:SetBackdrop(CARD_BACKDROP)
     sectionHeader:SetBackdropColor(0.18, 0.14, 0.08, 0.95)
     sectionHeader:SetBackdropBorderColor(0.5, 0.4, 0.18, 0.9)
@@ -560,6 +850,7 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
         local charKey = charItem.key
         local charData = charItem.data
         local charQuests = charData.quests or {}
+        local isCurrentChar = (charKey == currentKey)
 
         local pending = {}
         for _, q in ipairs(quests) do
@@ -571,38 +862,56 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
 
         if #pending > 0 then
             hasAnyIncomplete = true
-            local itemHeight = 32 + (#pending * 20)
+            local itemHeight = 34 + (#pending * 22)
 
             local itemBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-            itemBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, currentY)
-            itemBox:SetSize(860, itemHeight)
+            itemBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+            itemBox:SetSize(totalWidth, itemHeight)
             itemBox:SetBackdrop(CARD_BACKDROP)
-            itemBox:SetBackdropColor(0.11, 0.12, 0.16, 0.85)
-            itemBox:SetBackdropBorderColor(0.3, 0.32, 0.4, 0.6)
+
+            if isCurrentChar then
+                itemBox:SetBackdropColor(0.14, 0.17, 0.26, 0.95)
+                itemBox:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.95)
+            else
+                itemBox:SetBackdropColor(0.11, 0.12, 0.16, 0.88)
+                itemBox:SetBackdropBorderColor(0.3, 0.32, 0.4, 0.6)
+            end
 
             local charName = itemBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
             charName:SetPoint("TOPLEFT", 12, -8)
-            charName:SetText(GetFormattedName(charData) .. " |cff888888(" .. (charData.realm or "") .. ")|r")
+            local tag = isCurrentChar and " |cff00e5ff★ (Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+            charName:SetText(GetFormattedName(charData) .. tag)
 
             local countBadge = itemBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
             countBadge:SetPoint("TOPRIGHT", -14, -8)
             countBadge:SetText(string.format("|cffe74c3c%d Quests Remaining|r", #pending))
 
-            local mY = -30
+            local mY = -32
             for _, item in ipairs(pending) do
-                local qLine = itemBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-                qLine:SetPoint("TOPLEFT", 26, mY)
+                local qBtn = CreateFrame("Button", nil, itemBox)
+                qBtn:SetPoint("TOPLEFT", 26, mY)
+                qBtn:SetSize(totalWidth - 50, 20)
+                qBtn:RegisterForClicks("LeftButtonUp")
+
+                local qLine = qBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                qLine:SetPoint("LEFT", 0, 0)
 
                 local st = item.status and item.status.state
                 if st == "READY" or (item.status and item.status.readyToTurnIn) then
-                    qLine:SetText(WQT.ICON_READY .. "  |cffffffff" .. item.name .. "|r |cff00ccff(Ready to Turn In!)|r")
+                    qLine:SetText(WQT.ICON_READY .. "  |cffffffff" .. item.name .. "|r |cff00e5ff(Ready to Turn In!)|r")
                 elseif st == "PROGRESS" or (item.status and item.status.inProgress) then
-                    qLine:SetText(WQT.ICON_WAIT .. "  |cffffffff" .. item.name .. "|r |cfff39c12(In Progress)|r")
+                    qLine:SetText(WQT.ICON_PROGRESS .. "  |cffffffff" .. item.name .. "|r |cfff39c12(In Progress)|r")
                 else
                     qLine:SetText(WQT.ICON_CROSS .. "  |cffffffff" .. item.name .. "|r |cffe74c3c(Not Started)|r")
                 end
 
-                mY = mY - 20
+                qBtn:SetScript("OnClick", function()
+                    if IsShiftKeyDown() then
+                        WQT.ToggleQuestStatus(charKey, item.name)
+                    end
+                end)
+
+                mY = mY - 22
             end
 
             currentY = currentY - (itemHeight + 8)
@@ -611,8 +920,8 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
 
     if not hasAnyIncomplete then
         local allDoneBox = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-        allDoneBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 6, currentY)
-        allDoneBox:SetSize(860, 48)
+        allDoneBox:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, currentY)
+        allDoneBox:SetSize(totalWidth, 48)
         allDoneBox:SetBackdrop(CARD_BACKDROP)
         allDoneBox:SetBackdropColor(0.08, 0.20, 0.11, 0.9)
         allDoneBox:SetBackdropBorderColor(0.2, 0.6, 0.3, 0.8)
@@ -830,7 +1139,7 @@ function WQT.CreateMinimapButton()
         if button == "LeftButton" then
             WQT.ToggleUI()
         elseif button == "RightButton" then
-            local modes = { "grid", "cards", "todo", "combined" }
+            local modes = { "current", "grid", "cards", "todo", "combined" }
             local nextIdx = 1
             for i, m in ipairs(modes) do
                 if m == activeTab then

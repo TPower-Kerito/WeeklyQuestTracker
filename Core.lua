@@ -274,6 +274,7 @@ function WQT.ToggleQuestStatus(charKey, questName)
 
     if WQT.RefreshUI then WQT.RefreshUI() end
 end
+WQT.CycleQuestStatus = WQT.ToggleQuestStatus
 
 -- Add a new quest to the tracker dynamically
 function WQT.AddQuest(name, questID)
