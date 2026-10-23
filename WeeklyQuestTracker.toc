@@ -2,7 +2,7 @@
 ## Title: |cff00e5ffWeekly Quest|r |cffffd100Tracker|r
 ## Notes: Tracks weekly quests across all characters with Grid, Cards, and To-Do views.
 ## Author: Antigravity
-## Version: 1.1.2
+## Version: 1.1.3
 ## SavedVariables: WeeklyQuestTrackerDB
 ## IconTexture: Interface\Icons\inv_misc_compass_01
 ## AddonCompartmentFunc: WQT_OnAddonCompartmentClick
