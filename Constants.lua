@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.0.7"
+WQT.VERSION = "1.0.8"
 WQT.ADDON_TITLE = "|cff00ccffWeekly Quest Tracker|r"
 
 -- Default Tracked Quests
@@ -56,7 +56,7 @@ WQT.DEFAULT_QUESTS = {
 
 -- Default Addon Configuration
 WQT.DEFAULT_CONFIG = {
-    viewMode = "current", -- "current", "grid", "cards", "todo", or "combined"
+    viewMode = "current", -- "current", "grid", "cards", or "todo"
     showMinimapButton = true,
     minimapAngle = 45,
     autoOpenOnLogin = false,
@@ -83,6 +83,23 @@ WQT.STATUS_DONE_SHORT     = WQT.ICON_CHECK .. " |cff2ecc71Done|r"
 WQT.STATUS_READY_SHORT    = WQT.ICON_READY .. " |cff00e5ffReady|r"
 WQT.STATUS_PROGRESS_SHORT = WQT.ICON_PROGRESS .. " |cfff39c12Active|r"
 WQT.STATUS_TODO_SHORT     = WQT.ICON_CROSS .. " |cffe74c3cTo-Do|r"
+
+-- Class Colors Lookup Map
+WQT.CLASS_COLORS = {
+    ["WARRIOR"] = "ffc79c6e",
+    ["PALADIN"] = "fff58cba",
+    ["HUNTER"] = "ffabd473",
+    ["ROGUE"] = "fffff569",
+    ["PRIEST"] = "ffffffff",
+    ["DEATHKNIGHT"] = "ffc41f3b",
+    ["SHAMAN"] = "ff0070de",
+    ["MAGE"] = "ff69ccf0",
+    ["WARLOCK"] = "ff9482c9",
+    ["MONK"] = "ff00ff96",
+    ["DRUID"] = "ffff7d0a",
+    ["DEMONHUNTER"] = "ffa330c9",
+    ["EVOKER"] = "ff33937f",
+}
 
 -- Safe Class Color lookup
 function WQT.GetClassColor(classFileName)

@@ -140,7 +140,7 @@ function WQT.CreateMainFrame()
         WQT.ShowAddQuestDialog()
     end)
 
-    -- Tab Switcher Bar (5 Tabs)
+    -- Tab Switcher Bar (4 Tabs)
     local tabBar = CreateFrame("Frame", nil, f)
     tabBar:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 6, -6)
     tabBar:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -6, -6)
@@ -148,17 +148,16 @@ function WQT.CreateMainFrame()
 
     local tabButtons = {}
     local tabs = {
-        { id = "current", label = "⭐ Current Alt" },
+        { id = "current", label = "Current Alt" },
         { id = "grid", label = "Grid (All Alts)" },
         { id = "cards", label = "Cards" },
         { id = "todo", label = "To-Do List" },
-        { id = "combined", label = "Combined" },
     }
 
     local lastBtn = nil
     for _, t in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, tabBar, "BackdropTemplate")
-        btn:SetSize(148, 26)
+        btn:SetSize(168, 26)
         if not lastBtn then
             btn:SetPoint("LEFT", tabBar, "LEFT", 0, 0)
         else
@@ -208,7 +207,7 @@ function WQT.CreateMainFrame()
 
     local tipText = statusBar:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     tipText:SetPoint("RIGHT", -10, 0)
-    tipText:SetText("|cffffcc00Shift-Click cell: Cycle status|r • |cff888888Right-click quest: Delete|r")
+    tipText:SetText("|cffffcc00Shift-Click cell: Cycle status|r | |cff888888Right-click quest: Delete|r")
 
     -- Initialize frame as hidden so first toggle shows it immediately
     f:Hide()
@@ -277,9 +276,9 @@ function WQT.RefreshUI()
         WQT.RenderCardsView(sortedChars, quests, 0)
     elseif activeTab == "todo" then
         WQT.RenderTodoView(sortedChars, quests, 0)
-    elseif activeTab == "combined" then
-        local nextY = WQT.RenderTodoView(sortedChars, quests, 0, true)
-        WQT.RenderGridView(sortedChars, quests, nextY - 24)
+    else
+        activeTab = "current"
+        WQT.RenderCurrentCharacterView(quests, 0)
     end
 end
 
@@ -298,11 +297,12 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         charData = WeeklyQuestTrackerDB.characters and WeeklyQuestTrackerDB.characters[currentKey]
     end
 
-    local name = UnitName("player")
+    local name = UnitName("player") or "Unknown"
     local realm = GetNormalizedRealmName() or GetRealmName() or ""
-    local _, classFile = UnitClass("player")
-    local level = UnitLevel("player")
-    local classColorHex = WQT.CLASS_COLORS[classFile] or "ffffffff"
+    local localizedClass, classFile = UnitClass("player")
+    local level = UnitLevel("player") or 90
+    local _, _, _, classColorHex = WQT.GetClassColor(classFile)
+    classColorHex = classColorHex or "ffffffff"
 
     local charQuests = (charData and charData.quests) or {}
     local totalQuests = #quests
@@ -339,19 +339,18 @@ function WQT.RenderCurrentCharacterView(quests, startY)
 
     local heroDetails = heroCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     heroDetails:SetPoint("TOPLEFT", 16, -38)
-    local localizedClass = UnitClass("player")
-    heroDetails:SetText(string.format("Level %d %s • Realm: |cffffd100%s|r", level, localizedClass or classFile or "", realm))
+    heroDetails:SetText(string.format("Level %d %s | Realm: |cffffd100%s|r", level, localizedClass or classFile or "", realm))
 
     -- Quick Scan Button
     local scanBtn = CreateFrame("Button", nil, heroCard, "BackdropTemplate")
-    scanBtn:SetSize(148, 24)
+    scanBtn:SetSize(150, 24)
     scanBtn:SetPoint("TOPLEFT", 16, -62)
     scanBtn:SetBackdrop(CARD_BACKDROP)
     scanBtn:SetBackdropColor(0.16, 0.24, 0.36, 1)
     scanBtn:SetBackdropBorderColor(0.3, 0.6, 0.9, 0.9)
     local scanBtnText = scanBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     scanBtnText:SetPoint("CENTER", 0, 0)
-    scanBtnText:SetText("|cff00e5ff🔄 Re-Scan Current Alt|r")
+    scanBtnText:SetText("|cff00e5ffRe-Scan Character|r")
     scanBtn:SetScript("OnClick", function()
         WQT.ScanCurrentCharacter()
         print(string.format("%s: Re-scanned %s successfully.", WQT.ADDON_TITLE, name))
@@ -460,11 +459,11 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         qSub:SetPoint("BOTTOMLEFT", numBadge, "BOTTOMRIGHT", 12, 4)
         local hint = "Weekly Quest"
         if qName:find("Unity Against the Void") then
-            hint = "Midnight Choice: Arcantina • Abundance • Ritual Sites • Delves"
+            hint = "Midnight Choice: Arcantina - Abundance - Ritual Sites - Delves"
         elseif qName:find("Runestones") then
             hint = "Hallowfall / Midnight Weekly Defense"
         elseif qName:find("Turn Back the Surge") then
-            hint = "Coiled Isle • The Cursed Surge Public Event"
+            hint = "Coiled Isle - The Cursed Surge Public Event"
         elseif qName:find("Root of the World") then
             hint = "Haranir Relics & Sacred Legends"
         elseif qName:find("Offerings") then
@@ -631,7 +630,7 @@ function WQT.RenderGridView(sortedChars, quests, startY)
 
         local charLabel = charBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         charLabel:SetPoint("LEFT", 4, 0)
-        local charPrefix = isCurrentChar and "|cff00e5ff★ |r" or ""
+        local charPrefix = isCurrentChar and "|cff00e5ff[You] |r" or ""
         local charSuffix = isCurrentChar and " |cff00e5ff(You)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
         charLabel:SetText(charPrefix .. GetFormattedName(charData) .. charSuffix)
 
@@ -752,7 +751,7 @@ function WQT.RenderCardsView(sortedChars, quests, startY)
 
         local cardTitle = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
         cardTitle:SetPoint("TOPLEFT", 12, -10)
-        local tag = isCurrentChar and " |cff00e5ff★ (Current)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+        local tag = isCurrentChar and " |cff00e5ff(Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
         cardTitle:SetText(GetFormattedName(charData) .. tag)
 
         local badge = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -879,7 +878,7 @@ function WQT.RenderTodoView(sortedChars, quests, startY, isSubSection)
 
             local charName = itemBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
             charName:SetPoint("TOPLEFT", 12, -8)
-            local tag = isCurrentChar and " |cff00e5ff★ (Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
+            local tag = isCurrentChar and " |cff00e5ff(Current Alt)|r" or string.format(" |cff888888(%s)|r", charData.realm or "")
             charName:SetText(GetFormattedName(charData) .. tag)
 
             local countBadge = itemBox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1139,7 +1138,7 @@ function WQT.CreateMinimapButton()
         if button == "LeftButton" then
             WQT.ToggleUI()
         elseif button == "RightButton" then
-            local modes = { "current", "grid", "cards", "todo", "combined" }
+            local modes = { "current", "grid", "cards", "todo" }
             local nextIdx = 1
             for i, m in ipairs(modes) do
                 if m == activeTab then
