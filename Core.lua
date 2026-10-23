@@ -15,8 +15,7 @@ f:RegisterEvent("QUEST_ACCEPTED")
 f:RegisterEvent("QUEST_LOG_UPDATE")
 f:RegisterEvent("QUEST_WATCH_UPDATE")
 f:RegisterEvent("PLAYER_CAMPING")
-f:RegisterEvent("WEEKLY_REWARDS_UPDATE")
-f:RegisterEvent("WEEKLY_REWARDS_SHOW")
+pcall(function() f:RegisterEvent("WEEKLY_REWARDS_UPDATE") end)
 
 -- Helper: Get current character key (e.g. "Thrall-TwistingNether")
 function WQT.GetPlayerKey()
@@ -223,11 +222,17 @@ end
 -- FEATURE 4: GREAT VAULT SUMMARY (RAID / MYTHIC+ / DELVES)
 -- =========================================================================
 function WQT.ScanGreatVault()
-    local raidUnlocked = 0
-    local mythicUnlocked = 0
-    local worldUnlocked = 0
+    local result = {
+        raid = 0,
+        mythic = 0,
+        world = 0,
+        total = 0,
+        lastUpdate = time(),
+    }
 
-    if C_WeeklyRewards and C_WeeklyRewards.GetActivities then
+    pcall(function()
+        if not (C_WeeklyRewards and C_WeeklyRewards.GetActivities) then return end
+
         local raidType = Enum and Enum.WeeklyRewardChestThresholdType and Enum.WeeklyRewardChestThresholdType.Raid
         local mythicType = Enum and Enum.WeeklyRewardChestThresholdType and (Enum.WeeklyRewardChestThresholdType.MythicPlus or Enum.WeeklyRewardChestThresholdType.Activities)
         local worldType = Enum and Enum.WeeklyRewardChestThresholdType and Enum.WeeklyRewardChestThresholdType.World
@@ -256,31 +261,27 @@ function WQT.ScanGreatVault()
         end
 
         local allActs = C_WeeklyRewards.GetActivities() or {}
+        local r, m, w = 0, 0, 0
         if #allActs > 0 then
-            raidUnlocked = checkActivitiesList(allActs, raidType, 3)
-            mythicUnlocked = checkActivitiesList(allActs, mythicType, 1)
-            worldUnlocked = checkActivitiesList(allActs, worldType, 4)
-            if worldUnlocked == 0 and worldType then
-                worldUnlocked = checkActivitiesList(allActs, worldType, nil)
+            r = checkActivitiesList(allActs, raidType, 3)
+            m = checkActivitiesList(allActs, mythicType, 1)
+            w = checkActivitiesList(allActs, worldType, 4)
+            if w == 0 and worldType then
+                w = checkActivitiesList(allActs, worldType, nil)
             end
         else
-            if raidType then raidUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(raidType)) end
-            if mythicType then mythicUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(mythicType)) end
-            if worldType then worldUnlocked = checkActivitiesList(C_WeeklyRewards.GetActivities(worldType)) end
+            if raidType then r = checkActivitiesList(C_WeeklyRewards.GetActivities(raidType)) end
+            if mythicType then m = checkActivitiesList(C_WeeklyRewards.GetActivities(mythicType)) end
+            if worldType then w = checkActivitiesList(C_WeeklyRewards.GetActivities(worldType)) end
         end
-    end
 
-    raidUnlocked = math.min(math.max(raidUnlocked, 0), 3)
-    mythicUnlocked = math.min(math.max(mythicUnlocked, 0), 3)
-    worldUnlocked = math.min(math.max(worldUnlocked, 0), 3)
+        result.raid = math.min(math.max(r, 0), 3)
+        result.mythic = math.min(math.max(m, 0), 3)
+        result.world = math.min(math.max(w, 0), 3)
+        result.total = result.raid + result.mythic + result.world
+    end)
 
-    return {
-        raid = raidUnlocked,
-        mythic = mythicUnlocked,
-        world = worldUnlocked,
-        total = raidUnlocked + mythicUnlocked + worldUnlocked,
-        lastUpdate = time(),
-    }
+    return result
 end
 
 function WQT.PrintVaultSummary()
@@ -305,15 +306,19 @@ function WQT.PrintVaultSummary()
 
     for _, item in ipairs(sorted) do
         local cData = item.data
-        local v = cData.vault or { raid = 0, mythic = 0, world = 0, total = 0 }
+        local v = (cData and cData.vault) or {}
+        local vRaid = tonumber(v.raid) or 0
+        local vMythic = tonumber(v.mythic) or 0
+        local vWorld = tonumber(v.world) or 0
+        local vTotal = tonumber(v.total) or (vRaid + vMythic + vWorld)
         local _, _, _, hex = WQT.GetClassColor(cData.class)
         local tag = (item.key == currentKey) and " |cff00e5ff(Current Alt)|r" or ""
         print(string.format("  • |c%s%s|r%s: |cffffffffRaid:|r |c%s%d/3|r | |cffffffffMythic:|r |c%s%d/3|r | |cffffffffDelves:|r |c%s%d/3|r (|cffffcc00Total: %d/9|r)",
             hex or "ffffffff", cData.name or item.key, tag,
-            v.raid > 0 and "ff2ecc71" or "ffaaaaaa", v.raid,
-            v.mythic > 0 and "ff2ecc71" or "ffaaaaaa", v.mythic,
-            v.world > 0 and "ff2ecc71" or "ffaaaaaa", v.world,
-            v.total))
+            vRaid > 0 and "ff2ecc71" or "ffaaaaaa", vRaid,
+            vMythic > 0 and "ff2ecc71" or "ffaaaaaa", vMythic,
+            vWorld > 0 and "ff2ecc71" or "ffaaaaaa", vWorld,
+            vTotal))
     end
 end
 
@@ -684,8 +689,14 @@ end
 
 -- Event Listener
 f:SetScript("OnEvent", function(self, event, arg1, ...)
-    if event == "ADDON_LOADED" and arg1 == addonName then
-        WQT.InitDB()
+    if event == "ADDON_LOADED" then
+        if arg1 == addonName then
+            WQT.InitDB()
+        elseif arg1 == "Blizzard_WeeklyRewards" and WeeklyRewardsFrame then
+            WeeklyRewardsFrame:HookScript("OnShow", function()
+                WQT.ScanCurrentCharacter()
+            end)
+        end
     elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
         WQT.InitDB()
         WQT.CheckWeeklyReset()
@@ -701,7 +712,7 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
         end)
     elseif event == "PLAYER_CAMPING" then
         WQT.CheckAndShowLogoutReminder(false)
-    elseif event == "WEEKLY_REWARDS_UPDATE" or event == "WEEKLY_REWARDS_SHOW" then
+    elseif event == "WEEKLY_REWARDS_UPDATE" then
         C_Timer.After(0.5, function()
             WQT.ScanCurrentCharacter()
         end)
