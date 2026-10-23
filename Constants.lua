@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.0.8"
+WQT.VERSION = "1.0.9"
 WQT.ADDON_TITLE = "|cff00ccffWeekly Quest Tracker|r"
 
 -- Default Tracked Quests

@@ -157,7 +157,7 @@ function WQT.CreateMainFrame()
     local lastBtn = nil
     for _, t in ipairs(tabs) do
         local btn = CreateFrame("Button", nil, tabBar, "BackdropTemplate")
-        btn:SetSize(168, 26)
+        btn:SetSize(130, 26)
         if not lastBtn then
             btn:SetPoint("LEFT", tabBar, "LEFT", 0, 0)
         else
@@ -181,6 +181,80 @@ function WQT.CreateMainFrame()
         lastBtn = btn
     end
     f.tabButtons = tabButtons
+
+    -- Filter Bar (Right-aligned in tabBar for Grid, Cards, and To-Do)
+    local filterBar = CreateFrame("Frame", nil, tabBar)
+    filterBar:SetPoint("RIGHT", tabBar, "RIGHT", -2, 0)
+    filterBar:SetSize(430, 26)
+    f.filterContainer = filterBar
+
+    local fLabel = filterBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    fLabel:SetPoint("LEFT", 0, 0)
+    fLabel:SetText("|cff888888Filter:|r")
+
+    -- 1. Status Filter Button
+    local statusBtn = CreateFrame("Button", nil, filterBar, "BackdropTemplate")
+    statusBtn:SetSize(125, 24)
+    statusBtn:SetPoint("LEFT", fLabel, "RIGHT", 6, 0)
+    statusBtn:SetBackdrop(CARD_BACKDROP)
+    statusBtn:SetBackdropColor(0.14, 0.16, 0.22, 1)
+    statusBtn:SetBackdropBorderColor(0.3, 0.35, 0.45, 0.8)
+    local statusBtnText = statusBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    statusBtnText:SetPoint("CENTER", 0, 0)
+    statusBtnText:SetText("|cffffffffAll Alts|r v")
+    statusBtn.text = statusBtnText
+    statusBtn:SetScript("OnClick", function(self)
+        WQT.ToggleStatusDropdown(self)
+    end)
+
+    -- 2. Quest Filter Button
+    local questBtn = CreateFrame("Button", nil, filterBar, "BackdropTemplate")
+    questBtn:SetSize(160, 24)
+    questBtn:SetPoint("LEFT", statusBtn, "RIGHT", 6, 0)
+    questBtn:SetBackdrop(CARD_BACKDROP)
+    questBtn:SetBackdropColor(0.14, 0.16, 0.22, 1)
+    questBtn:SetBackdropBorderColor(0.3, 0.35, 0.45, 0.8)
+    local questBtnText = questBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    questBtnText:SetPoint("CENTER", 0, 0)
+    questBtnText:SetText("|cffffffffAll Quests|r v")
+    questBtn.text = questBtnText
+    questBtn:SetScript("OnClick", function(self)
+        WQT.ToggleQuestDropdown(self)
+    end)
+
+    -- 3. Reset Button
+    local resetBtn = CreateFrame("Button", nil, filterBar, "BackdropTemplate")
+    resetBtn:SetSize(22, 24)
+    resetBtn:SetPoint("LEFT", questBtn, "RIGHT", 6, 0)
+    resetBtn:SetBackdrop(CARD_BACKDROP)
+    resetBtn:SetBackdropColor(0.24, 0.12, 0.14, 1)
+    resetBtn:SetBackdropBorderColor(0.65, 0.25, 0.3, 0.9)
+    local resetBtnText = resetBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    resetBtnText:SetPoint("CENTER", 0, 0)
+    resetBtnText:SetText("|cffff4444X|r")
+    resetBtn:SetScript("OnClick", function()
+        WQT.currentStatusFilter = "ALL"
+        WQT.currentQuestFilter = "ALL"
+        WQT.CloseDropdownMenu()
+        WQT.UpdateFilterUI()
+        WQT.RefreshUI()
+    end)
+    resetBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:AddLine("Reset Filters", 1, 0.82, 0)
+        GameTooltip:AddLine("Show all characters and all quests.", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    resetBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    resetBtn:Hide()
+
+    f.filterControls = {
+        statusBtn = statusBtn,
+        statusBtnText = statusBtnText,
+        questBtn = questBtn,
+        questBtnText = questBtnText,
+        resetBtn = resetBtn,
+    }
 
     -- Main Scrollable Content Container
     local scrollFrame = CreateFrame("ScrollFrame", "WQT_ScrollFrame", f, "UIPanelScrollFrameTemplate")
@@ -243,6 +317,169 @@ function WQT.SetViewMode(mode)
 end
 
 -- =========================================================================
+-- FILTER LOGIC & DROPDOWN MENUS
+-- =========================================================================
+WQT.currentStatusFilter = "ALL" -- "ALL", "INCOMPLETE", "DONE"
+WQT.currentQuestFilter = "ALL"  -- "ALL" or specific quest.name
+
+local dropdownMenu = nil
+
+function WQT.CloseDropdownMenu()
+    if dropdownMenu then dropdownMenu:Hide() end
+end
+
+function WQT.OpenDropdownMenu(anchorBtn, items)
+    if not dropdownMenu then
+        dropdownMenu = CreateFrame("Frame", "WQT_FilterDropdownMenu", UIParent, "BackdropTemplate")
+        dropdownMenu:SetFrameStrata("DIALOG")
+        dropdownMenu:SetBackdrop(FRAME_BACKDROP)
+        dropdownMenu:SetBackdropColor(0.10, 0.12, 0.16, 0.98)
+        dropdownMenu:SetBackdropBorderColor(0.35, 0.45, 0.65, 1)
+        dropdownMenu:EnableMouse(true)
+    end
+
+    if dropdownMenu:IsShown() and dropdownMenu.currentAnchor == anchorBtn then
+        dropdownMenu:Hide()
+        return
+    end
+
+    dropdownMenu.currentAnchor = anchorBtn
+    for _, child in ipairs({ dropdownMenu:GetChildren() }) do
+        child:Hide()
+        child:SetParent(nil)
+    end
+
+    local itemHeight = 24
+    local menuWidth = math.max(anchorBtn:GetWidth() + 30, 220)
+    local totalHeight = 10 + (#items * itemHeight)
+
+    dropdownMenu:ClearAllPoints()
+    dropdownMenu:SetPoint("TOPLEFT", anchorBtn, "BOTTOMLEFT", 0, -3)
+    dropdownMenu:SetSize(menuWidth, totalHeight)
+
+    local curY = -6
+    for _, it in ipairs(items) do
+        local btn = CreateFrame("Button", nil, dropdownMenu)
+        btn:SetSize(menuWidth - 12, itemHeight)
+        btn:SetPoint("TOPLEFT", dropdownMenu, "TOPLEFT", 6, curY)
+
+        local t = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        t:SetPoint("LEFT", 8, 0)
+        t:SetText(it.text)
+        btn.text = t
+
+        local highlight = btn:CreateTexture(nil, "BACKGROUND")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(0.2, 0.35, 0.55, 0.45)
+        highlight:Hide()
+
+        btn:SetScript("OnEnter", function() highlight:Show() end)
+        btn:SetScript("OnLeave", function() highlight:Hide() end)
+        btn:SetScript("OnClick", function()
+            WQT.CloseDropdownMenu()
+            if it.onClick then it.onClick() end
+        end)
+
+        curY = curY - itemHeight
+    end
+
+    dropdownMenu:Show()
+end
+
+function WQT.ToggleStatusDropdown(anchor)
+    local items = {
+        {
+            text = "|cffffffffAll Alts (No Filter)|r",
+            onClick = function()
+                WQT.currentStatusFilter = "ALL"
+                WQT.UpdateFilterUI()
+                WQT.RefreshUI()
+            end
+        },
+        {
+            text = "|cffffa500Incomplete Alts Only|r",
+            onClick = function()
+                WQT.currentStatusFilter = "INCOMPLETE"
+                WQT.UpdateFilterUI()
+                WQT.RefreshUI()
+            end
+        },
+        {
+            text = "|cff2ecc71Completed Alts Only (6/6 Done)|r",
+            onClick = function()
+                WQT.currentStatusFilter = "DONE"
+                WQT.UpdateFilterUI()
+                WQT.RefreshUI()
+            end
+        },
+    }
+    WQT.OpenDropdownMenu(anchor, items)
+end
+
+function WQT.ToggleQuestDropdown(anchor)
+    local items = {
+        {
+            text = "|cffffffffAll Quests (No Quest Filter)|r",
+            onClick = function()
+                WQT.currentQuestFilter = "ALL"
+                WQT.UpdateFilterUI()
+                WQT.RefreshUI()
+            end
+        }
+    }
+
+    local quests = WeeklyQuestTrackerDB.quests or {}
+    for _, q in ipairs(quests) do
+        local qName = q.name
+        table.insert(items, {
+            text = string.format("Needs: |cffffd100%s|r", qName),
+            onClick = function()
+                WQT.currentQuestFilter = qName
+                WQT.UpdateFilterUI()
+                WQT.RefreshUI()
+            end
+        })
+    end
+
+    WQT.OpenDropdownMenu(anchor, items)
+end
+
+function WQT.UpdateFilterUI()
+    if not mainFrame or not mainFrame.filterControls then return end
+    local c = mainFrame.filterControls
+
+    -- Status Filter Button
+    if WQT.currentStatusFilter == "INCOMPLETE" then
+        c.statusBtnText:SetText("|cffffa500Incomplete Only|r v")
+        c.statusBtn:SetBackdropBorderColor(0.9, 0.6, 0.1, 1)
+    elseif WQT.currentStatusFilter == "DONE" then
+        c.statusBtnText:SetText("|cff2ecc71All Done|r v")
+        c.statusBtn:SetBackdropBorderColor(0.2, 0.8, 0.3, 1)
+    else
+        c.statusBtnText:SetText("|cffffffffAll Alts|r v")
+        c.statusBtn:SetBackdropBorderColor(0.3, 0.35, 0.45, 0.8)
+    end
+
+    -- Quest Filter Button
+    if WQT.currentQuestFilter ~= "ALL" then
+        local qShort = WQT.currentQuestFilter
+        if #qShort > 17 then qShort = qShort:sub(1, 15) .. "..." end
+        c.questBtnText:SetText(string.format("|cff00e5ffNeeds: %s|r v", qShort))
+        c.questBtn:SetBackdropBorderColor(0.0, 0.85, 1.0, 1)
+    else
+        c.questBtnText:SetText("|cffffffffAll Quests|r v")
+        c.questBtn:SetBackdropBorderColor(0.3, 0.35, 0.45, 0.8)
+    end
+
+    -- Reset Button
+    if WQT.currentStatusFilter ~= "ALL" or WQT.currentQuestFilter ~= "ALL" then
+        c.resetBtn:Show()
+    else
+        c.resetBtn:Hide()
+    end
+end
+
+-- =========================================================================
 -- RENDER VIEWS
 -- =========================================================================
 function WQT.RefreshUI()
@@ -254,6 +491,16 @@ function WQT.RefreshUI()
     local currentKey = WQT.GetPlayerKey()
     mainFrame.currentAltText:SetText(string.format("Current Alt: |cffffd100%s|r", currentKey))
 
+    -- Show Filter Bar on Grid, Cards, and To-Do; hide on Current Alt
+    if mainFrame.filterContainer then
+        if activeTab == "current" then
+            mainFrame.filterContainer:Hide()
+        else
+            mainFrame.filterContainer:Show()
+        end
+    end
+    WQT.UpdateFilterUI()
+
     for _, child in ipairs({ contentScrollChild:GetChildren() }) do
         child:Hide()
         child:SetParent(nil)
@@ -262,9 +509,49 @@ function WQT.RefreshUI()
     local quests = WeeklyQuestTrackerDB.quests or {}
     local chars = WeeklyQuestTrackerDB.characters or {}
 
+    local statusFilter = WQT.currentStatusFilter or "ALL"
+    local questFilter = WQT.currentQuestFilter or "ALL"
+
     local sortedChars = {}
     for charKey, data in pairs(chars) do
-        table.insert(sortedChars, { key = charKey, data = data })
+        local include = true
+        local charQuests = data.quests or {}
+
+        -- 1. Status Filter Check
+        if statusFilter == "INCOMPLETE" then
+            local hasIncomplete = false
+            for _, q in ipairs(quests) do
+                local qs = charQuests[q.name]
+                if not qs or (qs.state ~= "DONE" and not qs.completed) then
+                    hasIncomplete = true
+                    break
+                end
+            end
+            if not hasIncomplete then include = false end
+        elseif statusFilter == "DONE" then
+            local allDone = (#quests > 0)
+            for _, q in ipairs(quests) do
+                local qs = charQuests[q.name]
+                if not qs or (qs.state ~= "DONE" and not qs.completed) then
+                    allDone = false
+                    break
+                end
+            end
+            if not allDone then include = false end
+        end
+
+        -- 2. Quest Filter Check: Only includes characters that NEED this quest (not finished)
+        if include and questFilter ~= "ALL" then
+            local qs = charQuests[questFilter]
+            local isDone = qs and (qs.state == "DONE" or qs.completed)
+            if isDone then
+                include = false
+            end
+        end
+
+        if include then
+            table.insert(sortedChars, { key = charKey, data = data })
+        end
     end
     table.sort(sortedChars, function(a, b) return (a.data.name or "") < (b.data.name or "") end)
 
@@ -415,8 +702,8 @@ function WQT.RenderCurrentCharacterView(quests, startY)
 
     currentY = currentY - 34
 
-    -- 3. The 6 Individual Quest Cards (Height: 52px each)
-    local cardHeight = 52
+    -- 3. The 6 Individual Quest Cards (Height: 46px each)
+    local cardHeight = 46
     for index, q in ipairs(quests) do
         local qName = q.name
         local qs = charQuests[qName]
@@ -451,30 +738,13 @@ function WQT.RenderCurrentCharacterView(quests, startY)
         numText:SetPoint("CENTER", 0, 0)
         numText:SetText(tostring(index))
 
+        -- Single prominent quest title, perfectly centered vertically (No subtitle text)
         local qTitle = rowCard:CreateFontString(nil, "OVERLAY", "GameFontHighlightMedium")
-        qTitle:SetPoint("TOPLEFT", numBadge, "TOPRIGHT", 12, -4)
+        qTitle:SetPoint("LEFT", numBadge, "RIGHT", 14, 0)
         qTitle:SetText("|cffffd100" .. qName .. "|r")
 
-        local qSub = rowCard:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        qSub:SetPoint("BOTTOMLEFT", numBadge, "BOTTOMRIGHT", 12, 4)
-        local hint = "Weekly Quest"
-        if qName:find("Unity Against the Void") then
-            hint = "Midnight Choice: Arcantina - Abundance - Ritual Sites - Delves"
-        elseif qName:find("Runestones") then
-            hint = "Hallowfall / Midnight Weekly Defense"
-        elseif qName:find("Turn Back the Surge") then
-            hint = "Coiled Isle - The Cursed Surge Public Event"
-        elseif qName:find("Root of the World") then
-            hint = "Haranir Relics & Sacred Legends"
-        elseif qName:find("Offerings") then
-            hint = "Loa of Abundance Weekly Harvest"
-        elseif qName:find("Trailing Xal") then
-            hint = "Weekly Storyline Investigation"
-        end
-        qSub:SetText("|cff999999" .. hint .. "|r")
-
         local statusPill = CreateFrame("Frame", nil, rowCard, "BackdropTemplate")
-        statusPill:SetSize(185, 32)
+        statusPill:SetSize(185, 30)
         statusPill:SetPoint("RIGHT", rowCard, "RIGHT", -12, 0)
         statusPill:SetBackdrop(CARD_BACKDROP)
 
