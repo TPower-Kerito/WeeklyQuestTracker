@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.2.0"
+WQT.VERSION = "1.2.1"
 WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
 
 -- Available Minimap / Header Icons for User Selection
@@ -40,13 +40,13 @@ WQT.DEFAULT_QUESTS = {
     },
     {
         name = "Trailing Xal'atath",
-        ids = { 82414, 83240, 84300, 83120, 83121, 83122 },
+        ids = { 98172 },
         isWeekly = true,
     },
     {
         name = "Unity Against the Void",
-        -- 93744: Meta quest, 93767: Arcantina, 93890: Abundance, 95843: Ritual Sites, 93909: Delves
-        ids = { 93744, 93767, 93890, 95843, 93909 },
+        -- 93744: Meta quest, 93767: Arcantina, 93890: Abundance, 95843: Ritual Sites, 93909: Delves, 93892: Stormarion Assault, 98232: Vaults of Atal'Utek, 93913: World Boss
+        ids = { 93744, 93767, 93890, 95843, 93909, 93892, 98232, 93913 },
         isWeekly = true,
     },
     {

@@ -94,7 +94,7 @@ function WQT.InitDB()
             end
         end
 
-        -- v1.2.0 Migration: Clean up erroneous and legacy IDs
+        -- v1.2.0 / v1.2.1 Migration: Clean up erroneous and legacy IDs
         for _, q in ipairs(WeeklyQuestTrackerDB.quests) do
             if q.name == "Abundant Offerings" then
                 -- Purge bad IDs (82146: Cinderbee Surge, 81682) and set exact clean ID 89507
@@ -102,6 +102,9 @@ function WQT.InitDB()
             elseif q.name == "The Story of the Root of the World" then
                 -- Purge old speculative IDs and set exact verified ID 92724
                 q.ids = { 92724 }
+            elseif q.name == "Trailing Xal'atath" then
+                -- Purge TWW speculative IDs and set exact verified ID 98172
+                q.ids = { 98172 }
             end
         end
 
