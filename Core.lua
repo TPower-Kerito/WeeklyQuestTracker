@@ -94,6 +94,17 @@ function WQT.InitDB()
             end
         end
 
+        -- v1.2.0 Migration: Clean up erroneous and legacy IDs
+        for _, q in ipairs(WeeklyQuestTrackerDB.quests) do
+            if q.name == "Abundant Offerings" then
+                -- Purge bad IDs (82146: Cinderbee Surge, 81682) and set exact clean ID 89507
+                q.ids = { 89507 }
+            elseif q.name == "The Story of the Root of the World" then
+                -- Purge old speculative IDs and set exact verified ID 92724
+                q.ids = { 92724 }
+            end
+        end
+
         -- Ensure all default quests (e.g. Unity Against the Void) exist in user DB
         for _, defQ in ipairs(WQT.DEFAULT_QUESTS) do
             local found = false
@@ -187,7 +198,14 @@ end
 function WQT.GetQuestStatus(questEntry)
     if not questEntry or not questEntry.ids then return "INCOMPLETE" end
 
-    -- 1. Check if actively in player's QuestLog
+    -- 1. Check if flagged completed (Done & turned in) - HIGHEST PRIORITY
+    for _, qid in ipairs(questEntry.ids) do
+        if C_QuestLog.IsQuestFlaggedCompleted(qid) then
+            return "DONE"
+        end
+    end
+
+    -- 2. Check if actively in player's QuestLog
     local hasActiveQuest = false
     local isAnyComplete = false
     for _, qid in ipairs(questEntry.ids) do
@@ -205,13 +223,6 @@ function WQT.GetQuestStatus(questEntry)
             return "READY" -- Active and objectives done: needs to be turned in to NPC!
         else
             return "PROGRESS" -- Active in log, still doing objectives
-        end
-    end
-
-    -- 2. If NOT active in QuestLog, check if flagged completed (Done & turned in)
-    for _, qid in ipairs(questEntry.ids) do
-        if C_QuestLog.IsQuestFlaggedCompleted(qid) then
-            return "DONE"
         end
     end
 
@@ -540,6 +551,194 @@ function WQT.CheckQuests(searchFilter)
 end
 
 -- =========================================================================
+-- DIAGNOSTIC DATA DUMP & EXPORT (For Bug Reporting & Support)
+-- =========================================================================
+WQT.RecentTurnIns = WQT.RecentTurnIns or {}
+
+function WQT.GenerateDiagnosticDump()
+    local lines = {}
+    local function add(str) table.insert(lines, str) end
+
+    local name = UnitName("player") or "Unknown"
+    local realm = GetNormalizedRealmName() or GetRealmName() or "UnknownRealm"
+    local localizedClass, classFile = UnitClass("player")
+    local level = UnitLevel("player") or 0
+    local faction = UnitFactionGroup("player") or "Unknown"
+
+    add("==================================================")
+    add("   WEEKLY QUEST TRACKER - DIAGNOSTIC DATA DUMP    ")
+    add("==================================================")
+    add(string.format("Addon Version : %s", WQT.VERSION or "Unknown"))
+    add(string.format("Character     : %s - %s", name, realm))
+    add(string.format("Class / Level : %s (%s, Level %d) | Faction: %s", localizedClass or classFile or "", classFile or "", level, faction))
+    add(string.format("Client Time   : %s (Unix: %d)", date("%Y-%m-%d %H:%M:%S"), time()))
+
+    local secUntilReset = (C_DateAndTime and C_DateAndTime.GetSecondsUntilWeeklyReset and C_DateAndTime.GetSecondsUntilWeeklyReset()) or 0
+    add(string.format("Weekly Reset  : In %s (%d seconds)", WQT.FormatTimeRemaining and WQT.FormatTimeRemaining(secUntilReset) or tostring(secUntilReset), secUntilReset))
+    add("")
+
+    add("--------------------------------------------------")
+    add("1. TRACKED QUESTS DETAILED EVALUATION")
+    add("--------------------------------------------------")
+    local tracked = WeeklyQuestTrackerDB and WeeklyQuestTrackerDB.quests or {}
+    for idx, q in ipairs(tracked) do
+        local qName = q.name or ("Quest #" .. idx)
+        local curState = WQT.GetQuestStatus(q)
+        add(string.format("[%d] %s", idx, qName))
+        add(string.format("    - Resolved State : %s", curState))
+        add(string.format("    - Tracked IDs    : %s", table.concat(q.ids or {}, ", ")))
+        for _, id in ipairs(q.ids or {}) do
+            local onQ = C_QuestLog.IsOnQuest(id) and "YES" or "no"
+            local isComp = C_QuestLog.IsComplete(id) and "YES" or "no"
+            local isFlagged = C_QuestLog.IsQuestFlaggedCompleted(id) and "YES" or "no"
+            local title = C_QuestLog.GetTitleForQuestID(id)
+            title = (title and title ~= "") and ('"' .. title .. '"') or "(No Title Cached)"
+            add(string.format("      * ID %-6d: FlaggedCompleted=%-3s | OnQuest=%-3s | ObjectivesComplete=%-3s | %s",
+                id, isFlagged, onQ, isComp, title))
+        end
+        add("")
+    end
+
+    add("--------------------------------------------------")
+    add("2. ACTIVE QUESTS CURRENTLY IN LOG")
+    add("--------------------------------------------------")
+    local numEntries = C_QuestLog.GetNumQuestLogEntries() or 0
+    local foundCount = 0
+    for i = 1, numEntries do
+        local info = C_QuestLog.GetInfo(i)
+        if info and not info.isHeader then
+            foundCount = foundCount + 1
+            local ready = (info.isComplete or C_QuestLog.IsComplete(info.questID)) and "READY TO TURN IN" or "In Progress"
+            add(string.format("  • [ID: %-6d] %-35s [%s]", info.questID, info.title or "Unknown", ready))
+        end
+    end
+    if foundCount == 0 then
+        add("  (Quest log currently empty / no active quests)")
+    end
+    add("")
+
+    if WQT.RecentTurnIns and #WQT.RecentTurnIns > 0 then
+        add("--------------------------------------------------")
+        add("3. RECENT QUEST TURN-INS (THIS SESSION)")
+        add("--------------------------------------------------")
+        for _, t in ipairs(WQT.RecentTurnIns) do
+            add(string.format("  • [ID: %-6d] %-35s at %s", t.id, t.title or "Unknown", date("%H:%M:%S", t.time or time())))
+        end
+        add("")
+    end
+
+    add("--------------------------------------------------")
+    add("4. GREAT VAULT SLOTS")
+    add("--------------------------------------------------")
+    local v = WQT.ScanGreatVault and WQT.ScanGreatVault() or {}
+    add(string.format("  • Raid: %d/3 | Mythic: %d/3 | Delves: %d/3 | Total: %d/9",
+        v.raid or 0, v.mythic or 0, v.world or 0, v.total or 0))
+    add("")
+    add("==================================================")
+    add("               END OF DIAGNOSTIC DUMP             ")
+    add("==================================================")
+
+    return table.concat(lines, "\n")
+end
+
+local dumpFrame = nil
+function WQT.ShowDumpWindow()
+    if not dumpFrame then
+        dumpFrame = CreateFrame("Frame", "WQT_DiagnosticDumpFrame", UIParent, "BackdropTemplate")
+        dumpFrame:SetSize(640, 520)
+        dumpFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+        dumpFrame:SetFrameStrata("DIALOG")
+        dumpFrame:SetToplevel(true)
+        dumpFrame:EnableMouse(true)
+        dumpFrame:SetMovable(true)
+        dumpFrame:RegisterForDrag("LeftButton")
+        dumpFrame:SetScript("OnDragStart", dumpFrame.StartMoving)
+        dumpFrame:SetScript("OnDragStop", dumpFrame.StopMovingOrSizing)
+
+        dumpFrame:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        dumpFrame:SetBackdropColor(0.08, 0.09, 0.12, 0.98)
+        dumpFrame:SetBackdropBorderColor(0.0, 0.85, 1.0, 0.9)
+
+        -- Title
+        local title = dumpFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        title:SetPoint("TOPLEFT", 16, -14)
+        title:SetText("|cff00e5ffWeekly Quest|r |cffffd100Tracker|r - Diagnostic Data Export")
+
+        -- Subtitle / Instructions
+        local subtitle = dumpFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        subtitle:SetPoint("TOPLEFT", 16, -38)
+        subtitle:SetText("|cffaaaaaaPress |cffffffffCtrl + A|r then |cffffffffCtrl + C|r to copy all text, then paste to report issues.|r")
+
+        -- ScrollFrame with EditBox
+        local scrollBox = CreateFrame("ScrollFrame", "WQT_DumpScrollFrame", dumpFrame, "UIPanelScrollFrameTemplate")
+        scrollBox:SetPoint("TOPLEFT", 16, -62)
+        scrollBox:SetPoint("BOTTOMRIGHT", -36, 44)
+
+        local editBox = CreateFrame("EditBox", nil, scrollBox)
+        editBox:SetMultiLine(true)
+        editBox:SetFontObject("GameFontHighlightSmall")
+        editBox:SetWidth(560)
+        editBox:SetAutoFocus(true)
+        scrollBox:SetScrollChild(editBox)
+        dumpFrame.editBox = editBox
+
+        editBox:SetScript("OnEscapePressed", function()
+            dumpFrame:Hide()
+        end)
+
+        -- Close Button
+        local closeBtn = CreateFrame("Button", nil, dumpFrame, "BackdropTemplate")
+        closeBtn:SetSize(80, 24)
+        closeBtn:SetPoint("BOTTOMRIGHT", -16, 10)
+        closeBtn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        closeBtn:SetBackdropColor(0.20, 0.22, 0.28, 1)
+        closeBtn:SetBackdropBorderColor(0.4, 0.45, 0.55, 0.8)
+        local closeText = closeBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        closeText:SetPoint("CENTER", 0, 0)
+        closeText:SetText("Close")
+        closeBtn:SetScript("OnClick", function() dumpFrame:Hide() end)
+
+        -- Select All / Copy Button
+        local copyBtn = CreateFrame("Button", nil, dumpFrame, "BackdropTemplate")
+        copyBtn:SetSize(140, 24)
+        copyBtn:SetPoint("BOTTOMLEFT", 16, 10)
+        copyBtn:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8x8",
+            edgeFile = "Interface\\Buttons\\WHITE8x8",
+            edgeSize = 1,
+            insets = { left = 1, right = 1, top = 1, bottom = 1 }
+        })
+        copyBtn:SetBackdropColor(0.12, 0.35, 0.22, 1)
+        copyBtn:SetBackdropBorderColor(0.2, 0.85, 0.4, 0.9)
+        local copyText = copyBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        copyText:SetPoint("CENTER", 0, 0)
+        copyText:SetText("|cff2ecc71Select All (Copy)|r")
+        copyBtn:SetScript("OnClick", function()
+            dumpFrame.editBox:SetFocus()
+            dumpFrame.editBox:HighlightText()
+        end)
+    end
+
+    local text = WQT.GenerateDiagnosticDump()
+    dumpFrame.editBox:SetText(text)
+    dumpFrame:Show()
+    C_Timer.After(0.05, function()
+        dumpFrame.editBox:SetFocus()
+        dumpFrame.editBox:HighlightText()
+    end)
+end
+
+-- =========================================================================
 -- FEATURE 3: ALT INCOMPLETE REMINDER ON LOGOUT
 -- =========================================================================
 local lastReminderTime = 0
@@ -679,6 +878,8 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         if WQT.ToggleMiniHUD then WQT.ToggleMiniHUD() end
     elseif cmd == "reminder" or cmd == "testlogout" then
         WQT.CheckAndShowLogoutReminder(true)
+    elseif cmd == "dump" or cmd == "debug" or cmd == "export" then
+        WQT.ShowDumpWindow()
     elseif cmd == "vault" or cmd == "gv" or cmd == "bank" then
         WQT.PrintVaultSummary()
     elseif cmd == "fav" or cmd == "favorite" or cmd == "star" then
@@ -717,6 +918,7 @@ SlashCmdList["WEEKLYQUESTTRACKER"] = function(msg)
         print("  |cff00ff00/wqt|r - Toggle tracker window")
         print("  |cff00ff00/wqt hud|r - Toggle Mini HUD floating bar on screen")
         print("  |cff00ff00/wqt vault|r - Show Great Vault summary across all alts")
+        print("  |cff00ff00/wqt dump|r - Export diagnostic data for troubleshooting")
         print("  |cff00ff00/wqt fav [name]|r - Star/pin character as favorite")
         print("  |cff00ff00/wqt reminder|r - Test logout reminder alert")
         print("  |cff00ff00/wqt scan|r - Re-scan current character")
@@ -755,7 +957,18 @@ f:SetScript("OnEvent", function(self, event, arg1, ...)
         C_Timer.After(0.5, function()
             WQT.ScanCurrentCharacter()
         end)
-    elseif event == "QUEST_TURNED_IN" or event == "QUEST_REMOVED" or event == "QUEST_ACCEPTED" or event == "QUEST_LOG_UPDATE" or event == "QUEST_WATCH_UPDATE" then
+    elseif event == "QUEST_TURNED_IN" then
+        local qid = tonumber(arg1)
+        if qid then
+            local title = C_QuestLog.GetTitleForQuestID(qid) or ("Quest #" .. qid)
+            WQT.RecentTurnIns = WQT.RecentTurnIns or {}
+            table.insert(WQT.RecentTurnIns, 1, { id = qid, title = title, time = time() })
+            while #WQT.RecentTurnIns > 10 do table.remove(WQT.RecentTurnIns) end
+        end
+        C_Timer.After(0.5, function()
+            WQT.ScanCurrentCharacter()
+        end)
+    elseif event == "QUEST_REMOVED" or event == "QUEST_ACCEPTED" or event == "QUEST_LOG_UPDATE" or event == "QUEST_WATCH_UPDATE" then
         C_Timer.After(0.5, function()
             WQT.ScanCurrentCharacter()
         end)

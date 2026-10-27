@@ -8,7 +8,7 @@ local addonName, WQT = ...
 -- Expose addon globally
 _G["WeeklyQuestTracker"] = WQT
 
-WQT.VERSION = "1.1.9"
+WQT.VERSION = "1.2.0"
 WQT.ADDON_TITLE = "|cff00e5ffWeekly Quest|r |cffffd100Tracker|r"
 
 -- Available Minimap / Header Icons for User Selection
@@ -30,20 +30,12 @@ WQT.DEFAULT_QUESTS = {
     },
     {
         name = "Abundant Offerings",
-        ids = { 89507, 81682, 82146 },
+        ids = { 89507 },
         isWeekly = true,
     },
     {
         name = "The Story of the Root of the World",
-        ids = {
-            -- Haranir Relics & Legends of the Haranir (Root of the World, Relic Scenarios)
-            88998, 88993, 88994, 88995, 88996, 88997, 88999,
-            89000, 89001, 89002, 89003, 89004, 89005,
-            88990, 88991, 88992,
-            -- Harandar Storyline & Reliquary Quests
-            90733, 90734, 90735, 90740, 90741, 90742, 90743, 90744, 90745,
-            90730, 90731, 90732, 90736, 90737, 90738, 90739,
-        },
+        ids = { 92724 },
         isWeekly = true,
     },
     {

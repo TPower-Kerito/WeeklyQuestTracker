@@ -1887,6 +1887,22 @@ function WQT.RenderSettingsView(startY)
         StaticPopup_Show("WQT_CONFIRM_RESTORE_QUESTS")
     end)
 
+    -- Button C: Export Diagnostic Dump
+    local dumpBtn = CreateFrame("Button", nil, dbBox, "BackdropTemplate")
+    dumpBtn:SetPoint("LEFT", resetQBtn, "RIGHT", 14, 0)
+    dumpBtn:SetSize(220, 26)
+    dumpBtn:SetBackdrop(CARD_BACKDROP)
+    dumpBtn:SetBackdropColor(0.12, 0.25, 0.18, 1)
+    dumpBtn:SetBackdropBorderColor(0.2, 0.85, 0.4, 0.9)
+    local dumpText = dumpBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dumpText:SetPoint("CENTER", 0, 0)
+    dumpText:SetText("|cff2ecc71Export Diagnostic Dump|r")
+    dumpBtn:SetScript("OnClick", function()
+        if WQT.ShowDumpWindow then
+            WQT.ShowDumpWindow()
+        end
+    end)
+
     -- Tracked Alts Table
     local charHeader = dbBox:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     charHeader:SetPoint("TOPLEFT", 14, -72)
